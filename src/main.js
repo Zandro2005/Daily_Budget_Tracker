@@ -10,6 +10,7 @@ import './styles/animations.css';
 import { store } from './lib/store.js';
 import { playPop, playPuppyChirp } from './lib/audio.js';
 import { openQuickAddModal } from './components/quickAddModal.js';
+import { ICONS } from './lib/icons.js';
 
 // Views
 import { renderDashboard } from './views/dashboard.js';
@@ -39,15 +40,11 @@ function initApp() {
 
   // Build Shell Structure
   appRoot.innerHTML = `
-    <!-- Sky ambient clouds and stars -->
+    <!-- Sky ambient clouds and subtle decor -->
     <div class="sky-decor">
       <div class="decor-cloud decor-cloud-1"></div>
       <div class="decor-cloud decor-cloud-2"></div>
       <div class="decor-cloud decor-cloud-3"></div>
-      <div class="decor-star" style="top: 15%; left: 20%;">✨</div>
-      <div class="decor-star" style="top: 25%; right: 25%;">⭐</div>
-      <div class="decor-star" style="top: 45%; left: 8%;">✨</div>
-      <div class="decor-star" style="top: 70%; right: 15%;">🌟</div>
     </div>
 
     <!-- Main Container -->
@@ -56,15 +53,15 @@ function initApp() {
       <header class="app-header">
         <a href="#dashboard" class="brand" id="brand-link">
           <img src="/assets/mascot/happy.jpg" class="brand-avatar" alt="Lyka Wallet Mascot">
-          <div class="brand-title">Lyka Wallet <span style="font-size: 1rem;">☁️</span></div>
+          <div class="brand-title">Lyka Wallet</div>
         </a>
 
         <div class="header-controls">
-          <button class="icon-btn squish-btn" id="theme-toggle-btn" title="Toggle Day/Night Sky">
-            ${store.getSettings().theme === 'night' ? '🌙' : '☀️'}
+          <button class="icon-btn squish-btn" id="theme-toggle-btn" title="Toggle Day/Night" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;">
+            ${store.getSettings().theme === 'night' ? ICONS.moon : ICONS.sun}
           </button>
-          <a href="#settings" class="icon-btn squish-btn" title="Settings">
-            ⚙️
+          <a href="#settings" class="icon-btn squish-btn" title="Settings" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;">
+            ${ICONS.settings}
           </a>
         </div>
       </header>
@@ -75,19 +72,11 @@ function initApp() {
       <!-- Bottom Floating Nav Bar (Simple & Professional Mobile UI) -->
       <nav class="nav-bar">
         <button class="nav-link" data-route="#dashboard" title="Home">
-          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-            <polyline points="9 22 9 12 15 12 15 22"/>
-          </svg>
+          ${ICONS.home}
           <span>Home</span>
         </button>
         <button class="nav-link" data-route="#planner" title="Planner">
-          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
+          ${ICONS.calendar}
           <span>Planner</span>
         </button>
 
@@ -97,21 +86,11 @@ function initApp() {
         </button>
 
         <button class="nav-link" data-route="#transactions" title="History">
-          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="8" y1="6" x2="21" y2="6"/>
-            <line x1="8" y1="12" x2="21" y2="12"/>
-            <line x1="8" y1="18" x2="21" y2="18"/>
-            <line x1="3" y1="6" x2="3.01" y2="6"/>
-            <line x1="3" y1="12" x2="3.01" y2="12"/>
-            <line x1="3" y1="18" x2="3.01" y2="18"/>
-          </svg>
+          ${ICONS.history}
           <span>History</span>
         </button>
         <button class="nav-link" data-route="#settings" title="Settings">
-          <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
+          ${ICONS.settings}
           <span>Settings</span>
         </button>
       </nav>
@@ -123,7 +102,7 @@ function initApp() {
   themeBtn.addEventListener('click', () => {
     playPop();
     const newTheme = store.toggleTheme();
-    themeBtn.textContent = newTheme === 'night' ? '🌙' : '☀️';
+    themeBtn.innerHTML = newTheme === 'night' ? ICONS.moon : ICONS.sun;
   });
 
   const quickAddBtn = document.getElementById('nav-quick-add');

@@ -11,6 +11,7 @@ import {
   isFirebaseConfigured
 } from '../lib/firebase.js';
 import { showToast } from '../components/toast.js';
+import { ICONS } from '../lib/icons.js';
 
 export function renderSettings() {
   const container = document.createElement('div');
@@ -26,11 +27,11 @@ export function renderSettings() {
     const header = document.createElement('div');
     header.style.marginBottom = '1.5rem';
     header.innerHTML = `
-      <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem;">
-        <span>⚙️</span> Cloud Preferences & Sync
+      <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+        ${ICONS.settings} Preferences & Cloud Sync
       </h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-        Personalize your budget, manage realtime Firebase sync, and backup data
+      <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin: 0.2rem 0 0 0;">
+        Personalize your wallet, manage realtime Firebase sync, and backup data
       </p>
     `;
     container.appendChild(header);
@@ -40,8 +41,8 @@ export function renderSettings() {
     prefCard.className = 'cloud-card';
     prefCard.style.marginBottom = '1.5rem';
     prefCard.innerHTML = `
-      <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.4rem;">
-        <span>🎨</span> App Preferences
+      <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.4rem; margin: 0 0 1.25rem 0;">
+        ${ICONS.settings} App Preferences
       </h3>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem;">
@@ -67,25 +68,25 @@ export function renderSettings() {
 
         <!-- Theme Mode -->
         <div class="form-group">
-          <label class="form-label">Sky Theme</label>
+          <label class="form-label">Theme</label>
           <select id="setting-theme" class="form-select">
-            <option value="day" ${settings.theme === 'day' ? 'selected' : ''}>☁️ Day Sky (Pastel Blue & White)</option>
-            <option value="night" ${settings.theme === 'night' ? 'selected' : ''}>🌙 Night Sky (Dreamy Lavender Twilight)</option>
+            <option value="day" ${settings.theme === 'day' ? 'selected' : ''}>Day Mode (Clean Sky Blue & White)</option>
+            <option value="night" ${settings.theme === 'night' ? 'selected' : ''}>Night Mode (Twilight Slate)</option>
           </select>
         </div>
 
         <!-- Sound Effects -->
         <div class="form-group">
-          <label class="form-label">Kawaii Sound Effects</label>
+          <label class="form-label">Audio Effects</label>
           <label style="display: flex; align-items: center; gap: 0.65rem; cursor: pointer; padding-top: 0.35rem;">
             <input type="checkbox" id="setting-sound" ${isSoundEnabled() ? 'checked' : ''} style="width: 20px; height: 20px; accent-color: var(--sky-500);">
-            <span style="font-weight: 700; font-size: 0.95rem;">Enable gentle pops & coin chimes</span>
+            <span style="font-weight: 700; font-size: 0.95rem;">Enable gentle interaction chimes</span>
           </label>
         </div>
       </div>
 
       <button class="btn btn-primary squish-btn" id="save-pref-btn" style="margin-top: 1rem;">
-        Save Preferences ✨
+        Save Preferences
       </button>
     `;
 
@@ -98,7 +99,7 @@ export function renderSettings() {
       setSoundEnabled(sound);
       store.updateSettings({ currency, monthlyBudget, theme, soundEnabled: sound });
       playCoin();
-      showToast({ text: 'Preferences updated successfully! ☁️', icon: '✨' });
+      showToast({ text: 'Preferences updated successfully', icon: 'check' });
     };
 
     container.appendChild(prefCard);
@@ -109,16 +110,16 @@ export function renderSettings() {
     dbCard.style.marginBottom = '1.5rem';
     dbCard.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-        <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-          <span>🔥</span> Firebase Realtime Cloud Sync
+        <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+          ${ICONS.repeat} Firebase Realtime Cloud Sync
         </h3>
-        <span class="pill" style="background: ${isCloudConnected ? 'var(--mint-green)' : 'var(--sky-100)'}; color: var(--navy-800);">
-          ${isCloudConnected ? '🟢 Realtime Cloud Sync Active' : '🟡 Offline Local Mode (Ready)'}
+        <span class="pill" style="background: ${isCloudConnected ? 'var(--mint-green)' : 'var(--sky-100)'}; color: var(--navy-800); font-weight: 700;">
+          ${isCloudConnected ? 'Realtime Cloud Sync Active' : 'Offline Local Mode (Ready)'}
         </span>
       </div>
 
       <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.25rem;">
-        Your budget syncs seamlessly across your phone, laptop, and tablet with <strong>zero login required</strong>! Enter your Firebase configuration below or provide it in your environment variables:
+        Your budget syncs seamlessly across your phone, laptop, and tablet with <strong>zero login required</strong>!
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1rem;">
@@ -145,11 +146,11 @@ export function renderSettings() {
 
       <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
         <button class="btn btn-primary squish-btn" id="fb-save-btn">
-          <span>☁️</span> Connect Firebase
+          Connect Firebase
         </button>
         ${isCloudConnected ? `
           <button class="btn btn-secondary squish-btn" id="fb-sync-now-btn">
-            <span>⬆️</span> Sync Local Data to Cloud
+            Sync Local Data to Cloud
           </button>
           <button class="btn btn-danger squish-btn" id="fb-disconnect-btn">
             Disconnect
@@ -184,7 +185,7 @@ export function renderSettings() {
       saveFirebaseConfig(config);
       store.initFirebase();
       playCoin();
-      showToast({ text: 'Firebase connected! ☁️ Live sync active.', icon: '✨' });
+      showToast({ text: 'Firebase connected! Live sync active.', icon: 'check' });
       renderContent();
     };
 
@@ -192,14 +193,14 @@ export function renderSettings() {
       dbCard.querySelector('#fb-sync-now-btn').onclick = async () => {
         playPop();
         const statusBox = dbCard.querySelector('#fb-status-box');
-        statusBox.innerHTML = '<span>Syncing local data to Firebase cloud... ☁️</span>';
+        statusBox.innerHTML = '<span>Syncing local data to Firebase cloud...</span>';
         try {
           await store.pushLocalDataToCloud();
           playCoin();
-          statusBox.innerHTML = '<span style="color: var(--mint-deep);">✓ All local budget data synced to Cloud!</span>';
-          showToast({ text: 'Cloud sync complete! ☁️', icon: '✨' });
+          statusBox.innerHTML = '<span style="color: var(--mint-deep);">All local budget data synced to Cloud!</span>';
+          showToast({ text: 'Cloud sync complete', icon: 'check' });
         } catch (err) {
-          statusBox.innerHTML = `<span style="color: var(--danger);">✕ Sync error: ${err.message}</span>`;
+          statusBox.innerHTML = `<span style="color: var(--danger);">Sync error: ${err.message}</span>`;
         }
       };
     }
@@ -219,8 +220,8 @@ export function renderSettings() {
     const backupCard = document.createElement('div');
     backupCard.className = 'cloud-card';
     backupCard.innerHTML = `
-      <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
-        <span>📦</span> Data Backup & Restore
+      <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem; margin: 0 0 1rem 0;">
+        ${ICONS.folder} Data Backup & Restore
       </h3>
       <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
         Export your complete data anytime so you always keep your records.
@@ -228,20 +229,20 @@ export function renderSettings() {
 
       <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
         <button class="btn btn-secondary squish-btn" id="backup-json-btn">
-          <span>📥</span> Download JSON Backup
+          Download JSON Backup
         </button>
         <button class="btn btn-secondary squish-btn" id="backup-csv-btn">
-          <span>📊</span> Export CSV Sheet
+          Export CSV Sheet
         </button>
         <label class="btn btn-secondary squish-btn" style="cursor: pointer;">
-          <span>📤</span> Import JSON
+          Import JSON
           <input type="file" id="import-json-input" accept=".json" style="display: none;">
         </label>
         <button class="btn btn-secondary squish-btn" id="reset-demo-btn">
-          <span>🔄</span> Load Demo Data
+          Load Starter Data
         </button>
         <button class="btn btn-danger squish-btn" id="clear-all-btn" style="margin-left: auto;">
-          <span>🗑️</span> Reset / Clear All Data
+          Reset / Clear All Data
         </button>
       </div>
     `;
@@ -249,13 +250,13 @@ export function renderSettings() {
     backupCard.querySelector('#backup-json-btn').onclick = () => {
       playPop();
       store.exportJSON();
-      showToast({ text: 'JSON Backup created! 📦', icon: '✨' });
+      showToast({ text: 'JSON Backup created', icon: 'check' });
     };
 
     backupCard.querySelector('#backup-csv-btn').onclick = () => {
       playPop();
       store.exportCSV();
-      showToast({ text: 'CSV downloaded! 📊', icon: '✨' });
+      showToast({ text: 'CSV downloaded', icon: 'check' });
     };
 
     backupCard.querySelector('#import-json-input').onchange = (e) => {
@@ -267,7 +268,7 @@ export function renderSettings() {
         const success = store.importJSON(event.target.result);
         if (success) {
           playCoin();
-          showToast({ text: 'Data restored successfully! 🎉', icon: '🌟' });
+          showToast({ text: 'Data restored successfully', icon: 'check' });
           renderContent();
         } else {
           showToast({ text: 'Failed to import JSON file' });
@@ -280,7 +281,7 @@ export function renderSettings() {
       if (confirm('Load starter demo transactions and goals?')) {
         store.resetToDemoData();
         playCoin();
-        showToast({ text: 'Loaded demo data! ☁️' });
+        showToast({ text: 'Loaded starter data', icon: 'check' });
         renderContent();
       }
     };
@@ -289,7 +290,7 @@ export function renderSettings() {
       if (confirm('Reset everything? This will delete all transactions, recurring bills, and savings goals from both this device and Firebase cloud.')) {
         await store.clearAllData();
         playCoin();
-        showToast({ text: 'All data cleared! Fresh clean slate ☁️' });
+        showToast({ text: 'All data cleared' });
         renderContent();
       }
     };

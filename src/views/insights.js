@@ -6,6 +6,7 @@
 import { store } from '../lib/store.js';
 import { formatCurrency, getCurrentMonthKey, formatMonthName } from '../lib/format.js';
 import Chart from 'chart.js/auto';
+import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
 let donutChartInstance = null;
 let trendChartInstance = null;
@@ -38,10 +39,10 @@ export function renderInsights() {
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;';
     header.innerHTML = `
       <div>
-        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem;">
-          <span>📊</span> Financial Cloud Insights
+        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+          ${ICONS.pieChart} Financial Insights
         </h2>
-        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
+        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin: 0.2rem 0 0 0;">
           Visualize where your income flows each month
         </p>
       </div>
@@ -66,8 +67,8 @@ export function renderInsights() {
     kpiRow.innerHTML = `
       <div class="cloud-card" style="padding: 1.15rem;">
         <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Top Category</span>
-        <div style="font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem;">
-          ${highestCat ? `<span>${highestCat.emoji}</span> ${highestCat.name}` : 'None yet'}
+        <div style="font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.45rem;">
+          ${highestCat ? `<span style="color: var(--primary); display: flex;">${getCategoryIconSvg(highestCat.id || highestCat.name)}</span> ${highestCat.name}` : 'None yet'}
         </div>
         <div style="font-size: 0.82rem; color: var(--coral-alert); font-weight: 700;">
           ${highestCat ? formatCurrency(highestCat.spent, curr) : '₱0'}
@@ -102,8 +103,8 @@ export function renderInsights() {
     const donutBox = document.createElement('div');
     donutBox.className = 'cloud-card';
     donutBox.innerHTML = `
-      <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
-        <span>🍩</span> Category Breakdown
+      <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem; margin: 0 0 1rem 0;">
+        ${ICONS.pieChart} Category Breakdown
       </h3>
       <div style="position: relative; height: 260px;">
         <canvas id="category-donut-chart"></canvas>
@@ -115,8 +116,8 @@ export function renderInsights() {
     const trendBox = document.createElement('div');
     trendBox.className = 'cloud-card';
     trendBox.innerHTML = `
-      <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
-        <span>📈</span> Spending Over Time
+      <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem; margin: 0 0 1rem 0;">
+        ${ICONS.trendingUp} Spending Over Time
       </h3>
       <div style="position: relative; height: 260px;">
         <canvas id="daily-trend-chart"></canvas>
@@ -143,7 +144,7 @@ export function renderInsights() {
     ];
 
     if (donutCanvas) {
-      const labels = activeCats.length > 0 ? activeCats.map(c => `${c.emoji} ${c.name}`) : ['No data'];
+      const labels = activeCats.length > 0 ? activeCats.map(c => c.name) : ['No data'];
       const data = activeCats.length > 0 ? activeCats.map(c => c.spent) : [1];
       const colors = activeCats.length > 0 ? pastelColors.slice(0, activeCats.length) : ['#E2E8F0'];
 

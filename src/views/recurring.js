@@ -6,6 +6,7 @@ import { store } from '../lib/store.js';
 import { formatCurrency, formatDate, getTodayDateString } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { showToast } from '../components/toast.js';
+import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
 export function renderRecurring() {
   const container = document.createElement('div');
@@ -24,15 +25,15 @@ export function renderRecurring() {
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;';
     header.innerHTML = `
       <div>
-        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem;">
-          <span>🔁</span> Recurring Bills & Subscriptions
+        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+          ${ICONS.repeat} Recurring Bills & Subscriptions
         </h2>
-        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-          Keep track of rent, internet, Spotify, and fixed dues
+        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin: 0.2rem 0 0 0;">
+          Keep track of rent, internet, subscriptions, and fixed dues
         </p>
       </div>
-      <button class="btn btn-primary squish-btn" id="open-new-bill-btn">
-        <span>⚡</span> Add Subscription
+      <button class="btn btn-primary squish-btn" id="open-new-bill-btn" style="display: flex; align-items: center; gap: 0.35rem;">
+        ${ICONS.plusCircle} Add Subscription
       </button>
     `;
 
@@ -56,8 +57,8 @@ export function renderRecurring() {
             ${formatCurrency(totalCommitted, curr)}
           </div>
         </div>
-        <div class="pill" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
-          <span>📆</span> ${recurringList.length} Active Subscriptions
+        <div class="pill" style="padding: 0.5rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.35rem;">
+          ${ICONS.calendar} ${recurringList.length} Active Subscriptions
         </div>
       </div>
     `;
@@ -70,7 +71,7 @@ export function renderRecurring() {
     if (recurringList.length === 0) {
       listWrapper.innerHTML = `
         <div class="cloud-card" style="text-align: center; padding: 3rem 1rem;">
-          <div style="font-size: 3rem; margin-bottom: 0.5rem;">💌</div>
+          <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem auto; color: var(--text-muted);">${ICONS.repeat}</div>
           <h3 style="font-family: var(--font-display); font-size: 1.25rem;">No recurring bills added yet</h3>
           <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">Add your subscriptions to never miss a due date!</p>
         </div>
@@ -99,8 +100,8 @@ export function renderRecurring() {
 
         itemCard.innerHTML = `
           <div style="display: flex; align-items: center; gap: 0.85rem;">
-            <div style="width: 44px; height: 44px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; font-size: 1.35rem;">
-              ${category ? category.emoji : '⚡'}
+            <div style="width: 44px; height: 44px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+              ${getCategoryIconSvg(item.categoryId || (category ? category.name : 'bills'))}
             </div>
             <div>
               <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);">${item.name}</div>
@@ -116,16 +117,16 @@ export function renderRecurring() {
             </div>
             ${isPaid ? `
               <div style="display: flex; align-items: center; gap: 0.4rem;">
-                <span class="bill-pill bill-pill-paid">✓ Paid this month</span>
+                <span class="bill-pill bill-pill-paid">${ICONS.check} Paid this month</span>
                 <button class="bill-pill-undo undo-paid-btn" data-id="${item.id}" title="Reset to unpaid">Undo</button>
               </div>
             ` : `
               <button class="bill-pill bill-pill-btn squish-btn mark-paid-btn" data-id="${item.id}">
-                Pay & Log ✓
+                Pay & Log
               </button>
             `}
-            <button class="icon-btn delete-bill-btn" data-id="${item.id}" title="Delete" style="width: 32px; height: 32px; font-size: 0.85rem; color: var(--danger);">
-              🗑️
+            <button class="icon-btn delete-bill-btn" data-id="${item.id}" title="Delete" style="width: 32px; height: 32px; color: var(--danger); display: flex; align-items: center; justify-content: center;">
+              ${ICONS.trash}
             </button>
           </div>
         `;
@@ -135,7 +136,7 @@ export function renderRecurring() {
           markBtn.onclick = () => {
             playCoin();
             store.markRecurringPaid(item.id);
-            showToast({ text: `Paid & logged ${item.name}! ☁️`, icon: '✨' });
+            showToast({ text: `Paid & logged ${item.name}`, icon: 'check' });
             renderContent();
           };
         }
@@ -144,7 +145,7 @@ export function renderRecurring() {
         if (undoBtn) {
           undoBtn.onclick = () => {
             store.unmarkRecurringPaid(item.id);
-            showToast({ text: `Reset ${item.name} to unpaid ⚡` });
+            showToast({ text: `Reset ${item.name} to unpaid` });
             renderContent();
           };
         }
@@ -152,7 +153,7 @@ export function renderRecurring() {
         itemCard.querySelector('.delete-bill-btn').onclick = () => {
           if (confirm(`Remove subscription "${item.name}"?`)) {
             store.deleteRecurring(item.id);
-            showToast({ text: 'Subscription removed! 🗑️' });
+            showToast({ text: 'Subscription removed' });
             renderContent();
           }
         };
@@ -228,7 +229,7 @@ export function renderRecurring() {
       });
 
       playCoin();
-      showToast({ text: 'Subscription saved! 🔁', icon: '✨' });
+      showToast({ text: 'Subscription saved', icon: 'check' });
       close();
       renderContent();
     };

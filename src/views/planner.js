@@ -8,6 +8,7 @@ import { formatCurrency } from '../lib/format.js';
 import { playPop, playCoin, playSuccess } from '../lib/audio.js';
 import { firePastelConfetti } from '../lib/confetti.js';
 import { showToast } from '../components/toast.js';
+import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
 export function renderPlanner() {
   const container = document.createElement('div');
@@ -30,9 +31,11 @@ export function renderPlanner() {
     header.style.marginBottom = '1.25rem';
     header.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h2 style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 700;">🗓️ Budget Planner</h2>
+        <h2 style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+          ${ICONS.calendar} Budget Planner
+        </h2>
         <button class="pill squish-btn" id="plan-503020-btn" style="cursor: pointer; border: none; padding: 0.4rem 0.75rem; font-size: 0.78rem; background: var(--sky-100); color: var(--primary);">
-          ✨ 50/30/20
+          50/30/20 Smart Rule
         </button>
       </div>
     `;
@@ -41,13 +44,13 @@ export function renderPlanner() {
       playSuccess();
       store.apply503020Rule(expectedIncome);
       firePastelConfetti();
-      showToast({ text: '50/30/20 Smart Rule applied! ☁️', icon: '✨' });
+      showToast({ text: '50/30/20 Smart Rule applied!', icon: 'check' });
       renderContent();
     };
 
     container.appendChild(header);
 
-    // 2. Safe Daily Spend Card (The #1 metric busy adults love!)
+    // 2. Safe Daily Spend Card
     const dailyCard = document.createElement('div');
     dailyCard.className = 'cloud-card';
     dailyCard.style.padding = '1.25rem';
@@ -68,8 +71,8 @@ export function renderPlanner() {
             ${allowance.daysRemaining} days left in this month &bull; ${formatCurrency(summary.remainingBudget, curr)} remaining
           </div>
         </div>
-        <div style="font-size: 2.2rem; background: #FFF; width: 56px; height: 56px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); border: 2px solid var(--sky-200);">
-          ☕
+        <div style="background: #FFF; width: 50px; height: 50px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); border: 2px solid var(--sky-200); color: var(--primary);">
+          ${ICONS.wallet}
         </div>
       </div>
     `;
@@ -127,7 +130,9 @@ export function renderPlanner() {
     envelopesCard.style.padding = '1.25rem';
     envelopesCard.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">🗂️ Envelopes</h3>
+        <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+          ${ICONS.folder} Envelopes
+        </h3>
         <span style="font-size: 0.72rem; color: var(--text-muted);">Tap to adjust</span>
       </div>
 
@@ -149,8 +154,10 @@ export function renderPlanner() {
 
       itemEl.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="font-size: 1.3rem;">${cat.emoji}</span>
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+              ${getCategoryIconSvg(cat.id || cat.name)}
+            </div>
             <div>
               <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main);">${cat.name}</div>
               <div style="font-size: 0.74rem; color: var(--text-muted);">
@@ -190,7 +197,7 @@ export function renderPlanner() {
     backdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title"><span>✏️ Edit Monthly Blueprint</span></h3>
+          <h3 class="modal-title">Edit Monthly Blueprint</h3>
           <button class="modal-close" id="bp-close">&times;</button>
         </div>
         <form id="bp-form">
@@ -202,11 +209,11 @@ export function renderPlanner() {
             <label class="form-label">Total Monthly Budget Cap (${store.getSettings().currency})</label>
             <input type="number" id="bp-budget" class="form-input" required value="${currentBudget}" step="any">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-              The remaining amount will be your planned savings!
+              The remaining amount will be your planned savings
             </small>
           </div>
           <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.85rem; margin-top: 0.75rem;">
-            Save Targets ✨
+            Save Targets
           </button>
         </form>
       </div>
@@ -233,7 +240,7 @@ export function renderPlanner() {
       });
 
       playCoin();
-      showToast({ text: 'Monthly plan updated! ☁️', icon: '✨' });
+      showToast({ text: 'Monthly plan updated', icon: 'check' });
       close();
       renderContent();
     };
@@ -249,7 +256,10 @@ export function renderPlanner() {
     backdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title"><span>${cat.emoji} ${cat.name}</span></h3>
+          <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.45rem;">
+            <span style="color: var(--primary); display: flex;">${getCategoryIconSvg(cat.id || cat.name)}</span>
+            <span>${cat.name}</span>
+          </h3>
           <button class="modal-close" id="limit-close">&times;</button>
         </div>
         <form id="limit-form">

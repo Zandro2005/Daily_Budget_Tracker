@@ -6,6 +6,7 @@ import { store } from '../lib/store.js';
 import { formatCurrency } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { showToast } from '../components/toast.js';
+import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
 export function renderCategories() {
   const container = document.createElement('div');
@@ -23,15 +24,15 @@ export function renderCategories() {
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;';
     header.innerHTML = `
       <div>
-        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem;">
-          <span>🗂️</span> Category Cloud Budgets
+        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+          ${ICONS.folder} Category Budgets
         </h2>
-        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-          Assign monthly limits to keep your treats in check
+        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin: 0.2rem 0 0 0;">
+          Assign monthly limits to keep your expenses in check
         </p>
       </div>
-      <button class="btn btn-primary squish-btn" id="open-new-cat-btn">
-        <span>🌸</span> New Category
+      <button class="btn btn-primary squish-btn" id="open-new-cat-btn" style="display: flex; align-items: center; gap: 0.35rem;">
+        ${ICONS.plusCircle} New Category
       </button>
     `;
 
@@ -58,23 +59,25 @@ export function renderCategories() {
       card.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between;">
           <div style="display: flex; align-items: center; gap: 0.65rem;">
-            <div style="width: 44px; height: 44px; border-radius: var(--radius-full); background: ${cat.color || 'var(--sky-100)'}; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
-              ${cat.emoji}
+            <div style="width: 44px; height: 44px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+              ${getCategoryIconSvg(cat.id || cat.name)}
             </div>
             <div>
-              <h4 style="font-size: 1.05rem; font-weight: 700;">${cat.name}</h4>
+              <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0;">${cat.name}</h4>
               <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">
                 ${cat.monthly_limit > 0 ? `Limit: ${formatCurrency(cat.monthly_limit, curr)}` : 'No monthly limit'}
               </span>
             </div>
           </div>
           <div style="display: flex; gap: 0.35rem;">
-            <button class="icon-btn edit-cat-btn" data-id="${cat.id}" style="width: 32px; height: 32px; font-size: 0.85rem;" title="Edit limit">✏️</button>
+            <button class="icon-btn edit-cat-btn" data-id="${cat.id}" style="width: 32px; height: 32px;" title="Edit limit">
+              ${ICONS.settings}
+            </button>
           </div>
         </div>
 
         <div>
-          <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.35rem;">
             <span>Spent: ${formatCurrency(cat.spent, curr)}</span>
             <span style="color: ${isOver ? 'var(--coral-alert)' : 'var(--text-muted)'};">
               ${cat.monthly_limit > 0 ? `${Math.round(cat.percent)}% used` : ''}
@@ -86,7 +89,7 @@ export function renderCategories() {
           ${
             cat.monthly_limit > 0
               ? `<div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 0.4rem; font-weight: 600;">
-                  ${isOver ? `⚠️ Over limit by ${formatCurrency(cat.spent - cat.monthly_limit, curr)}` : `☁️ ${formatCurrency(cat.remaining, curr)} remaining`}
+                  ${isOver ? `Over limit by ${formatCurrency(cat.spent - cat.monthly_limit, curr)}` : `${formatCurrency(cat.remaining, curr)} remaining`}
                 </div>`
               : ''
           }
@@ -110,30 +113,16 @@ export function renderCategories() {
     const modalBackdrop = document.createElement('div');
     modalBackdrop.className = 'modal-backdrop open';
 
-    const emojis = ['🍱', '🧋', '🚌', '⚡', '🛍️', '🌸', '🎮', '💊', '📚', '☕', '🎂', '🏖️', '🐾', '💄', '🛒'];
-    let selectedEmoji = existingCat ? existingCat.emoji : '🌸';
-
     modalBackdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title"><span>${isEdit ? '✏️ Edit' : '🌸 Add'} Category</span></h3>
+          <h3 class="modal-title">${isEdit ? 'Edit' : 'Add'} Category</h3>
           <button class="modal-close" id="cat-modal-close">&times;</button>
         </div>
         <form id="cat-form">
           <div class="form-group">
             <label class="form-label">Category Name</label>
-            <input type="text" id="cat-name-input" class="form-input" required value="${existingCat ? existingCat.name : ''}" placeholder="e.g. Skin Care, Boba Fund...">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Pick an Emoji</label>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.35rem;">
-              ${emojis.map(e => `
-                <button type="button" class="icon-btn emoji-select-btn ${e === selectedEmoji ? 'active' : ''}" data-emoji="${e}" style="width: 38px; height: 38px; font-size: 1.25rem;">
-                  ${e}
-                </button>
-              `).join('')}
-            </div>
+            <input type="text" id="cat-name-input" class="form-input" required value="${existingCat ? existingCat.name : ''}" placeholder="e.g. Skin Care, Tech & Tools...">
           </div>
 
           <div class="form-group">
@@ -165,20 +154,11 @@ export function renderCategories() {
       if (e.target === modalBackdrop) close();
     });
 
-    modalBackdrop.querySelectorAll('.emoji-select-btn').forEach(btn => {
-      btn.onclick = () => {
-        playPop();
-        selectedEmoji = btn.dataset.emoji;
-        modalBackdrop.querySelectorAll('.emoji-select-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      };
-    });
-
     if (modalBackdrop.querySelector('#cat-delete-btn')) {
       modalBackdrop.querySelector('#cat-delete-btn').onclick = () => {
         if (confirm(`Delete category "${existingCat.name}"?`)) {
           store.deleteCategory(existingCat.id);
-          showToast({ text: 'Category deleted! 🗑️' });
+          showToast({ text: 'Category deleted' });
           close();
           renderContent();
         }
@@ -193,17 +173,15 @@ export function renderCategories() {
       if (isEdit) {
         store.updateCategory(existingCat.id, {
           name,
-          emoji: selectedEmoji,
           monthly_limit: limit,
         });
-        showToast({ text: 'Category updated! ✨' });
+        showToast({ text: 'Category updated', icon: 'check' });
       } else {
         store.addCategory({
           name,
-          emoji: selectedEmoji,
           monthly_limit: limit,
         });
-        showToast({ text: 'New category added! 🌸' });
+        showToast({ text: 'New category added', icon: 'check' });
       }
       playCoin();
       close();

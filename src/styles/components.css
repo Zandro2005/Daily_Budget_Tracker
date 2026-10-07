@@ -366,6 +366,27 @@
   gap: 0.35rem;
 }
 
+/* Generic UI vector icons */
+.ui-icon {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2.2;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.stat-pill-label .ui-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.btn .ui-icon,
+.squish-btn .ui-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
 .stat-pill-val {
   font-family: var(--font-display);
   font-size: 1.15rem;

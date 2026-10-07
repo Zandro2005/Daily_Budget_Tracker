@@ -8,6 +8,7 @@ import { renderMascot } from '../components/mascot.js';
 import { openQuickAddModal } from '../components/quickAddModal.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { showToast } from '../components/toast.js';
+import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
 export function renderDashboard() {
   const container = document.createElement('div');
@@ -17,14 +18,14 @@ export function renderDashboard() {
   const settings = store.getSettings();
   const curr = settings.currency;
 
-  // 1. Hero Card with Balance + Cloud Mascot
+  // 1. Hero Card with Balance + Mascot
   const heroCard = document.createElement('div');
   heroCard.className = 'hero-card';
 
   const heroInfo = document.createElement('div');
   heroInfo.innerHTML = `
     <div class="balance-label">
-      ☁️ ${new Date().toLocaleDateString('en-US', { month: 'long' })} Remaining
+      ${ICONS.wallet} ${new Date().toLocaleDateString('en-US', { month: 'long' })} Remaining
     </div>
     <div class="balance-amount" style="margin: 0.1rem 0 0.45rem 0;">${formatCurrency(summary.remainingBudget, curr)}</div>
     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.55rem;">
@@ -40,11 +41,11 @@ export function renderDashboard() {
 
     <div class="balance-stats">
       <div class="stat-pill">
-        <span class="stat-pill-label">🌱 Income</span>
+        <span class="stat-pill-label" style="color: var(--mint-deep);">${ICONS.arrowDownLeft} Income</span>
         <span class="stat-pill-val val-income">+${formatCurrency(summary.totalIncome, curr)}</span>
       </div>
       <div class="stat-pill">
-        <span class="stat-pill-label">💸 Spent</span>
+        <span class="stat-pill-label" style="color: var(--coral-alert);">${ICONS.arrowUpRight} Spent</span>
         <span class="stat-pill-val val-expense">-${formatCurrency(summary.totalExpense, curr)}</span>
       </div>
     </div>
@@ -57,15 +58,15 @@ export function renderDashboard() {
   heroCard.appendChild(mascotWidget);
   container.appendChild(heroCard);
 
-  // 2. Compact Rounded Action Row (No scroll mistouch)
+  // 2. Compact Rounded Action Row (No emojis, sleek vector icons)
   const actionRow = document.createElement('div');
   actionRow.style.cssText = 'display: flex; gap: 0.65rem; margin-bottom: 1.25rem;';
   actionRow.innerHTML = `
-    <button class="squish-btn" id="dash-quick-add" style="flex: 1; padding: 0.55rem 0.85rem; border-radius: 9999px; border: 1.5px solid rgba(255, 255, 255, 0.9); background: linear-gradient(135deg, #FF8E9E 0%, #FF6B7D 100%); color: #FFF; font-family: var(--font-display); font-size: 0.86rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; box-shadow: 0 4px 12px -2px rgba(255, 107, 125, 0.35); transition: all 0.15s ease;">
-      <span style="font-size: 1rem;">💸</span> Log Expense
+    <button class="squish-btn" id="dash-quick-add" style="flex: 1; padding: 0.6rem 0.85rem; border-radius: 9999px; border: 1.5px solid rgba(255, 255, 255, 0.9); background: linear-gradient(135deg, #FF8E9E 0%, #FF6B7D 100%); color: #FFF; font-family: var(--font-display); font-size: 0.86rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.45rem; box-shadow: 0 4px 12px -2px rgba(255, 107, 125, 0.35); transition: all 0.15s ease;">
+      ${ICONS.minusCircle} Log Expense
     </button>
-    <button class="squish-btn" id="dash-quick-income" style="flex: 1; padding: 0.55rem 0.85rem; border-radius: 9999px; border: 1.5px solid rgba(255, 255, 255, 0.9); background: linear-gradient(135deg, #5CD69D 0%, #3DB87E 100%); color: #FFF; font-family: var(--font-display); font-size: 0.86rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; box-shadow: 0 4px 12px -2px rgba(61, 184, 126, 0.35); transition: all 0.15s ease;">
-      <span style="font-size: 1rem;">💰</span> Log Income
+    <button class="squish-btn" id="dash-quick-income" style="flex: 1; padding: 0.6rem 0.85rem; border-radius: 9999px; border: 1.5px solid rgba(255, 255, 255, 0.9); background: linear-gradient(135deg, #5CD69D 0%, #3DB87E 100%); color: #FFF; font-family: var(--font-display); font-size: 0.86rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.45rem; box-shadow: 0 4px 12px -2px rgba(61, 184, 126, 0.35); transition: all 0.15s ease;">
+      ${ICONS.plusCircle} Log Income
     </button>
   `;
 
@@ -93,18 +94,23 @@ export function renderDashboard() {
 
   categoryCard.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">🗂️ Spending</h3>
+      <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+        ${ICONS.pieChart} Spending
+      </h3>
       <button class="pill squish-btn" id="view-all-cats-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">Planner →</button>
     </div>
     <div class="cat-list-box" style="display: flex; flex-direction: column; gap: 0.85rem;">
       ${
         catSpendings.length === 0
-          ? '<p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1rem;">No expenses yet 🌸</p>'
+          ? '<p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1rem;">No expenses yet logged</p>'
           : catSpendings
               .map(c => `
           <div>
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; font-weight: 700; margin-bottom: 0.3rem;">
-              <span>${c.emoji} ${c.name.split(' ')[0]}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; font-weight: 700; margin-bottom: 0.35rem;">
+              <span style="display: flex; align-items: center; gap: 0.4rem;">
+                <span style="width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--primary);">${getCategoryIconSvg(c.id || c.name)}</span>
+                ${c.name.split(' ')[0]}
+              </span>
               <span>${formatCurrency(c.spent, curr)}<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;"> / ${c.monthly_limit > 0 ? formatCurrency(c.monthly_limit, curr) : '∞'}</span></span>
             </div>
             <div class="cloud-progress" style="height: 8px;">
@@ -140,7 +146,9 @@ export function renderDashboard() {
 
     recurringCard.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">🔁 Upcoming Bills</h3>
+        <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+          ${ICONS.repeat} Upcoming Bills
+        </h3>
         <button class="pill squish-btn" id="view-all-bills-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">Manage →</button>
       </div>
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -158,7 +166,7 @@ export function renderDashboard() {
                 <span style="font-weight: 800; font-family: var(--font-display);">${formatCurrency(r.amount, curr)}</span>
                 ${isPaid ? `
                   <span class="bill-pill bill-pill-paid">
-                    ✓ Paid
+                    ${ICONS.check} Paid
                   </span>
                 ` : `
                   <button class="bill-pill bill-pill-btn squish-btn bill-pay-quick-btn" data-id="${r.id}">
@@ -182,7 +190,7 @@ export function renderDashboard() {
         playCoin();
         const id = btn.dataset.id;
         store.markRecurringPaid(id);
-        showToast({ text: 'Bill marked as paid & logged! ⚡', icon: '✨' });
+        showToast({ text: 'Bill marked as paid & logged!', icon: 'check' });
       };
     });
 
@@ -196,19 +204,21 @@ export function renderDashboard() {
 
   txCard.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">📝 Recent</h3>
+      <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+        ${ICONS.clock} Recent
+      </h3>
       <button class="pill squish-btn" id="view-all-tx-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">All →</button>
     </div>
     <div style="display: flex; flex-direction: column; gap: 0.65rem;">
       ${
         recentTx.length === 0
-          ? '<p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1.5rem;">No transactions yet! Tap + to start. ☁️</p>'
+          ? '<p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1.5rem;">No transactions yet. Tap + to start.</p>'
           : recentTx
               .map(t => `
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.9rem; border-radius: var(--radius-md); background: var(--bg-card-cloud); border: 1px solid var(--border-color); transition: all 0.2s ease;">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <div style="width: 38px; height: 38px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                ${t.categoryEmoji || '🏷️'}
+              <div style="width: 38px; height: 38px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary); flex-shrink: 0;">
+                ${getCategoryIconSvg(t.categoryId || t.categoryName)}
               </div>
               <div>
                 <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main);">${t.note || t.categoryName}</div>
@@ -233,3 +243,4 @@ export function renderDashboard() {
 
   return container;
 }
+

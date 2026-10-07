@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { openQuickAddModal } from '../components/quickAddModal.js';
 import { showToast } from '../components/toast.js';
+import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
 export function renderTransactions() {
   const container = document.createElement('div');
@@ -32,22 +33,22 @@ export function renderTransactions() {
     topBar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.15rem;';
     topBar.innerHTML = `
       <div>
-        <h2 style="font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-          <span>📋</span> History
+        <h2 style="font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+          ${ICONS.history} History
         </h2>
-        <p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
-          All your logged treats & income
+        <p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin: 0.2rem 0 0 0;">
+          All your logged expenses and income records
         </p>
       </div>
-      <button class="pill squish-btn" id="export-csv-btn" style="cursor: pointer; border: none; padding: 0.45rem 0.85rem; font-size: 0.78rem;">
-        <span>📥</span> Export CSV
+      <button class="pill squish-btn" id="export-csv-btn" style="cursor: pointer; border: none; padding: 0.45rem 0.85rem; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+        ${ICONS.download} Export CSV
       </button>
     `;
 
     topBar.querySelector('#export-csv-btn').onclick = () => {
       playPop();
       store.exportCSV();
-      showToast({ text: 'CSV export downloaded! 📁', icon: '✨' });
+      showToast({ text: 'CSV export downloaded!', icon: 'check' });
     };
 
     container.appendChild(topBar);
@@ -64,15 +65,15 @@ export function renderTransactions() {
           type="text" 
           id="tx-search-input" 
           class="form-input" 
-          placeholder="🔍 Search notes or categories..."
+          placeholder="Search notes or categories..."
           value="${currentFilter.search}"
         >
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
           <!-- Type Filter -->
           <select id="tx-type-filter" class="form-select" style="flex: 1; min-width: 120px;">
             <option value="all" ${currentFilter.type === 'all' ? 'selected' : ''}>All Types</option>
-            <option value="expense" ${currentFilter.type === 'expense' ? 'selected' : ''}>💸 Expenses Only</option>
-            <option value="income" ${currentFilter.type === 'income' ? 'selected' : ''}>💰 Income Only</option>
+            <option value="expense" ${currentFilter.type === 'expense' ? 'selected' : ''}>Expenses Only</option>
+            <option value="income" ${currentFilter.type === 'income' ? 'selected' : ''}>Income Only</option>
           </select>
 
           <!-- Category Filter -->
@@ -80,7 +81,7 @@ export function renderTransactions() {
             <option value="all" ${currentFilter.categoryId === 'all' ? 'selected' : ''}>All Categories</option>
             ${categories.map(c => `
               <option value="${c.id}" ${currentFilter.categoryId === c.id ? 'selected' : ''}>
-                ${c.emoji} ${c.name}
+                ${c.name}
               </option>
             `).join('')}
           </select>
@@ -129,7 +130,7 @@ export function renderTransactions() {
     if (txList.length === 0) {
       listWrapper.innerHTML = `
         <div class="cloud-card" style="text-align: center; padding: 3rem 1.5rem;">
-          <div style="font-size: 3rem; margin-bottom: 0.5rem;">☁️</div>
+          <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem auto; color: var(--text-muted);">${ICONS.history}</div>
           <h3 style="font-family: var(--font-display); font-size: 1.25rem;">No matching transactions found</h3>
           <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">Try adjusting your search or add a new record!</p>
         </div>
@@ -152,8 +153,8 @@ export function renderTransactions() {
       html += `
         <div class="tx-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; border-radius: var(--radius-md); background: var(--bg-card-cloud); border: 1px solid var(--border-color); gap: 0.75rem;">
           <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 0;">
-            <div style="width: 42px; height: 42px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; font-size: 1.35rem; flex-shrink: 0;">
-              ${t.categoryEmoji || '🏷️'}
+            <div style="width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary); flex-shrink: 0;">
+              ${getCategoryIconSvg(t.categoryId || t.categoryName)}
             </div>
             <div style="min-width: 0;">
               <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -171,8 +172,8 @@ export function renderTransactions() {
             };">
               ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount, curr)}
             </span>
-            <button class="icon-btn tx-delete-btn" data-id="${t.id}" title="Delete record" style="width: 32px; height: 32px; font-size: 0.85rem; color: var(--danger);">
-              🗑️
+            <button class="icon-btn tx-delete-btn" data-id="${t.id}" title="Delete record" style="width: 32px; height: 32px; color: var(--danger); display: flex; align-items: center; justify-content: center;">
+              ${ICONS.trash}
             </button>
           </div>
         </div>
@@ -189,11 +190,10 @@ export function renderTransactions() {
         const deleted = store.deleteTransaction(id);
         if (deleted) {
           showToast({
-            text: 'Transaction deleted! 🗑️',
-            icon: '🐾',
+            text: 'Transaction deleted',
             onUndo: () => {
               store.addTransaction(deleted);
-              showToast({ text: 'Restored! ✨' });
+              showToast({ text: 'Transaction restored' });
             },
           });
           renderListOnly();

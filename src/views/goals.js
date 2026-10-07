@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '../lib/format.js';
 import { playPop, playSuccess, playCoin } from '../lib/audio.js';
 import { firePastelConfetti } from '../lib/confetti.js';
 import { showToast } from '../components/toast.js';
+import { ICONS } from '../lib/icons.js';
 
 export function renderGoals() {
   const container = document.createElement('div');
@@ -24,15 +25,15 @@ export function renderGoals() {
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;';
     header.innerHTML = `
       <div>
-        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem;">
-          <span>🎯</span> Dream Savings Goals
+        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+          ${ICONS.target} Savings Goals
         </h2>
-        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-          Save up for travel, emergency funds, or sweet treats
+        <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin: 0.2rem 0 0 0;">
+          Save up for travel, emergency funds, or personal milestones
         </p>
       </div>
-      <button class="btn btn-primary squish-btn" id="open-new-goal-btn">
-        <span>🌟</span> New Goal
+      <button class="btn btn-primary squish-btn" id="open-new-goal-btn" style="display: flex; align-items: center; gap: 0.35rem;">
+        ${ICONS.plusCircle} New Goal
       </button>
     `;
 
@@ -49,9 +50,9 @@ export function renderGoals() {
     if (goalsList.length === 0) {
       grid.innerHTML = `
         <div class="cloud-card" style="text-align: center; padding: 3rem 1.5rem; grid-column: 1 / -1;">
-          <div style="font-size: 3rem; margin-bottom: 0.5rem;">🌸</div>
+          <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem auto; color: var(--text-muted);">${ICONS.target}</div>
           <h3 style="font-family: var(--font-display); font-size: 1.25rem;">No savings goals yet</h3>
-          <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">Start small! Even ₱500 a week brings big dreams to life.</p>
+          <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">Start small! Even consistent weekly savings bring big goals to life.</p>
         </div>
       `;
     } else {
@@ -68,11 +69,11 @@ export function renderGoals() {
         card.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 0.65rem;">
-              <div style="width: 48px; height: 48px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; font-size: 1.6rem;">
-                ${goal.emoji}
+              <div style="width: 44px; height: 44px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+                ${ICONS.target}
               </div>
               <div>
-                <h4 style="font-size: 1.1rem; font-weight: 700;">${goal.name}</h4>
+                <h4 style="font-size: 1.1rem; font-weight: 700; margin: 0;">${goal.name}</h4>
                 <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">
                   Target: ${formatCurrency(goal.targetAmount, curr)} ${goal.deadline ? `&bull; By ${formatDate(goal.deadline)}` : ''}
                 </span>
@@ -80,7 +81,7 @@ export function renderGoals() {
             </div>
             ${
               isDone
-                ? '<span class="pill" style="background: var(--mint-green); color: #1E293B;">👑 Complete!</span>'
+                ? '<span class="pill" style="background: var(--mint-green); color: #1E293B; font-weight: 700;">Completed</span>'
                 : `<span class="pill">${percent}%</span>`
             }
           </div>
@@ -98,11 +99,11 @@ export function renderGoals() {
 
           <!-- Action Buttons -->
           <div style="display: flex; gap: 0.5rem; margin-top: auto;">
-            <button class="btn btn-secondary btn-sm squish-btn add-savings-btn" data-id="${goal.id}" style="flex: 1;">
-              <span>🌱</span> Add Money
+            <button class="btn btn-secondary btn-sm squish-btn add-savings-btn" data-id="${goal.id}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+              ${ICONS.plusCircle} Add Money
             </button>
-            <button class="icon-btn delete-goal-btn" data-id="${goal.id}" title="Delete goal" style="width: 34px; height: 34px; font-size: 0.85rem; color: var(--danger);">
-              🗑️
+            <button class="icon-btn delete-goal-btn" data-id="${goal.id}" title="Delete goal" style="width: 34px; height: 34px; color: var(--danger); display: flex; align-items: center; justify-content: center;">
+              ${ICONS.trash}
             </button>
           </div>
         `;
@@ -115,7 +116,7 @@ export function renderGoals() {
         card.querySelector('.delete-goal-btn').onclick = () => {
           if (confirm(`Remove savings goal "${goal.name}"?`)) {
             store.deleteGoal(goal.id);
-            showToast({ text: 'Goal deleted! 🗑️' });
+            showToast({ text: 'Goal deleted' });
             renderContent();
           }
         };
@@ -131,29 +132,16 @@ export function renderGoals() {
     const modalBackdrop = document.createElement('div');
     modalBackdrop.className = 'modal-backdrop open';
 
-    const emojis = ['✈️', '🛡️', '💻', '🎵', '🏠', '🚗', '💍', '🎁', '🐶', '👗', '🎮'];
-    let selectedEmoji = '✈️';
-
     modalBackdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title"><span>🌟 New Savings Goal</span></h3>
+          <h3 class="modal-title">New Savings Goal</h3>
           <button class="modal-close" id="new-goal-close">&times;</button>
         </div>
         <form id="new-goal-form">
           <div class="form-group">
             <label class="form-label">Goal Name</label>
-            <input type="text" id="g-name" class="form-input" required placeholder="e.g. Kyoto Trip, New Tablet, Rainy Day">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Pick an Emoji Icon</label>
-            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem;">
-              ${emojis.map(e => `
-                <button type="button" class="icon-btn goal-emoji-btn ${e === selectedEmoji ? 'active' : ''}" data-emoji="${e}" style="width: 38px; height: 38px; font-size: 1.25rem;">
-                  ${e}
-                </button>
-              `).join('')}
-            </div>
+            <input type="text" id="g-name" class="form-input" required placeholder="e.g. Kyoto Trip, New Tablet, Emergency Fund">
           </div>
           <div class="form-group">
             <label class="form-label">Target Amount (${store.getSettings().currency})</label>
@@ -184,15 +172,6 @@ export function renderGoals() {
       if (e.target === modalBackdrop) close();
     });
 
-    modalBackdrop.querySelectorAll('.goal-emoji-btn').forEach(btn => {
-      btn.onclick = () => {
-        playPop();
-        selectedEmoji = btn.dataset.emoji;
-        modalBackdrop.querySelectorAll('.goal-emoji-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      };
-    });
-
     modalBackdrop.querySelector('#new-goal-form').onsubmit = (e) => {
       e.preventDefault();
       const name = modalBackdrop.querySelector('#g-name').value;
@@ -206,12 +185,12 @@ export function renderGoals() {
         name,
         targetAmount,
         currentAmount: initial,
-        emoji: selectedEmoji,
+        emoji: '🎯',
         deadline,
       });
 
       playCoin();
-      showToast({ text: `Goal "${name}" created! 🌸`, icon: '✨' });
+      showToast({ text: `Goal "${name}" created`, icon: 'check' });
       close();
       renderContent();
     };
@@ -227,7 +206,7 @@ export function renderGoals() {
     modalBackdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title"><span>🌱 Add to ${goal.name}</span></h3>
+          <h3 class="modal-title">Add to ${goal.name}</h3>
           <button class="modal-close" id="contrib-close">&times;</button>
         </div>
         <form id="contrib-form">
@@ -242,7 +221,7 @@ export function renderGoals() {
             <button type="button" class="preset-chip" data-val="5000">+5,000</button>
           </div>
           <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.85rem;">
-            Add to Goal ✨
+            Add to Goal
           </button>
         </form>
       </div>
@@ -276,10 +255,10 @@ export function renderGoals() {
       if (updated && updated.isCompleted) {
         playSuccess();
         firePastelConfetti();
-        showToast({ text: `🎉 CONGRATS! You reached your goal for "${goal.name}"! 👑`, icon: '🌟' });
+        showToast({ text: `Goal reached for "${goal.name}"!`, icon: 'check' });
       } else {
         playCoin();
-        showToast({ text: `Added ${curr}${addVal.toLocaleString()} to ${goal.name}! 🌱`, icon: '✨' });
+        showToast({ text: `Added ${curr}${addVal.toLocaleString()} to ${goal.name}`, icon: 'check' });
       }
 
       close();
