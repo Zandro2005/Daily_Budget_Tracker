@@ -65,25 +65,39 @@ export function renderDashboard() {
   heroCard.appendChild(mascotWidget);
   container.appendChild(heroCard);
 
-  // 2. Action row
+  // 2. Interactive Rounded Action Row
   const actionRow = document.createElement('div');
-  actionRow.style.cssText = 'display: flex; gap: 0.75rem; margin-bottom: 1.75rem; flex-wrap: wrap;';
+  actionRow.style.cssText = 'display: flex; gap: 0.85rem; margin-bottom: 1.5rem;';
   actionRow.innerHTML = `
-    <button class="btn btn-primary squish-btn" id="dash-quick-add" style="flex: 1; min-width: 140px;">
-      <span>➕</span> Log Expense
+    <button class="squish-btn" id="dash-quick-add" style="flex: 1; padding: 0.95rem 1rem; border-radius: 9999px; border: 2px solid rgba(255, 255, 255, 0.8); background: linear-gradient(135deg, #FF8E9E 0%, #FF6B7D 100%); color: #FFF; font-family: var(--font-display); font-size: 1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 8px 20px -3px rgba(255, 107, 125, 0.45); transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+      <span style="font-size: 1.25rem;">💸</span> Log Expense
     </button>
-    <button class="btn btn-secondary squish-btn" id="dash-quick-income" style="flex: 1; min-width: 140px;">
-      <span>💰</span> Log Income
+    <button class="squish-btn" id="dash-quick-income" style="flex: 1; padding: 0.95rem 1rem; border-radius: 9999px; border: 2px solid rgba(255, 255, 255, 0.8); background: linear-gradient(135deg, #5CD69D 0%, #3DB87E 100%); color: #FFF; font-family: var(--font-display); font-size: 1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 8px 20px -3px rgba(61, 184, 126, 0.45); transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+      <span style="font-size: 1.25rem;">💰</span> Log Income
     </button>
   `;
-  actionRow.querySelector('#dash-quick-add').onclick = () => {
+
+  const addExpenseBtn = actionRow.querySelector('#dash-quick-add');
+  const addIncomeBtn = actionRow.querySelector('#dash-quick-income');
+
+  const handleExpenseClick = (e) => {
+    e.preventDefault();
     playPop();
     openQuickAddModal('expense');
   };
-  actionRow.querySelector('#dash-quick-income').onclick = () => {
+
+  const handleIncomeClick = (e) => {
+    e.preventDefault();
     playPop();
     openQuickAddModal('income');
   };
+
+  addExpenseBtn.addEventListener('click', handleExpenseClick);
+  addExpenseBtn.addEventListener('touchend', handleExpenseClick);
+
+  addIncomeBtn.addEventListener('click', handleIncomeClick);
+  addIncomeBtn.addEventListener('touchend', handleIncomeClick);
+
   container.appendChild(actionRow);
 
   // 3. Category Budgets Snapshot

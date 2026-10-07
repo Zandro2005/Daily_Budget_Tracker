@@ -113,10 +113,15 @@ function initApp() {
   });
 
   const quickAddBtn = document.getElementById('nav-quick-add');
-  quickAddBtn.addEventListener('click', () => {
-    playPop();
-    openQuickAddModal('expense');
-  });
+  if (quickAddBtn) {
+    const triggerQuickAdd = (e) => {
+      e.preventDefault();
+      playPop();
+      openQuickAddModal('expense');
+    };
+    quickAddBtn.addEventListener('click', triggerQuickAdd);
+    quickAddBtn.addEventListener('touchend', triggerQuickAdd);
+  }
 
   const navLinks = document.querySelectorAll('.nav-link');
   navLinks.forEach(link => {

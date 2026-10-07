@@ -11,16 +11,22 @@ import { showToast } from './toast.js';
 let modalInstance = null;
 
 export function openQuickAddModal(initialType = 'expense') {
-  if (!modalInstance) {
-    modalInstance = createModalDOM();
-    document.body.appendChild(modalInstance);
-  }
+  try {
+    if (!modalInstance) {
+      modalInstance = createModalDOM();
+    }
+    if (!document.body.contains(modalInstance)) {
+      document.body.appendChild(modalInstance);
+    }
 
-  resetModalState(initialType);
-  modalInstance.classList.add('open');
-  const amountInput = modalInstance.querySelector('#qa-amount');
-  if (amountInput) {
-    setTimeout(() => amountInput.focus(), 150);
+    resetModalState(initialType);
+    modalInstance.classList.add('open');
+    const amountInput = modalInstance.querySelector('#qa-amount');
+    if (amountInput) {
+      setTimeout(() => amountInput.focus(), 150);
+    }
+  } catch (err) {
+    console.error('Error opening quick add modal:', err);
   }
 }
 
@@ -31,6 +37,7 @@ export function closeQuickAddModal() {
 }
 
 function resetModalState(type = 'expense') {
+  if (!modalInstance) return;
   const form = modalInstance.querySelector('#qa-form');
   if (form) form.reset();
 
@@ -40,11 +47,12 @@ function resetModalState(type = 'expense') {
   const dateInput = modalInstance.querySelector('#qa-date');
   if (dateInput) dateInput.value = getTodayDateString();
 
-  renderCategoryChips(type);
+  renderCategoryChips(type, modalInstance);
 }
 
-function renderCategoryChips(type) {
-  const container = modalInstance.querySelector('#qa-category-grid');
+function renderCategoryChips(type, root = modalInstance) {
+  if (!root) return;
+  const container = root.querySelector('#qa-category-grid');
   if (!container) return;
   container.innerHTML = '';
 
@@ -78,6 +86,7 @@ function renderCategoryChips(type) {
 function createModalDOM() {
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
+  modalInstance = backdrop;
 
   backdrop.innerHTML = `
     <div class="modal-dialog">
@@ -178,7 +187,7 @@ function createModalDOM() {
       pillExpense.style.background = 'transparent';
       pillExpense.style.color = 'var(--text-muted)';
     }
-    renderCategoryChips(val);
+    renderCategoryChips(val, backdrop);
   }
 
   typeRadios.forEach(radio => {
