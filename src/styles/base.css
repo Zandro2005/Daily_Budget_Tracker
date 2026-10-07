@@ -1,0 +1,127 @@
+/* ====================================================================
+   CLOUDY BUDGET - BASE & LAYOUT STYLES
+   ==================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  min-height: 100%;
+  font-family: var(--font-body);
+  color: var(--text-main);
+  background: var(--bg-page);
+  background-attachment: fixed;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-x: hidden;
+  transition: background 0.4s ease, color 0.3s ease;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sky-300);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sky-400);
+}
+
+/* Sky Background Elements */
+.sky-decor {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.decor-cloud {
+  position: absolute;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.3) 70%, transparent 100%);
+  border-radius: 50%;
+  filter: blur(20px);
+  opacity: 0.6;
+}
+
+.decor-cloud-1 {
+  width: 450px;
+  height: 250px;
+  top: -60px;
+  right: -80px;
+  animation: floatSlow 7s ease-in-out infinite;
+}
+
+.decor-cloud-2 {
+  width: 500px;
+  height: 300px;
+  bottom: 10%;
+  left: -120px;
+  animation: floatSlow 9s ease-in-out infinite reverse;
+}
+
+.decor-cloud-3 {
+  width: 320px;
+  height: 180px;
+  top: 35%;
+  right: 5%;
+  animation: floatSlow 11s ease-in-out infinite;
+  opacity: 0.4;
+}
+
+/* Decorative Twinkling Stars (visible in night mode) */
+.decor-star {
+  position: absolute;
+  color: #FFE58F;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+[data-theme="night"] .decor-star {
+  opacity: 0.75;
+  animation: starTwinkle 3s ease-in-out infinite;
+}
+
+/* Layout Container */
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 480px; /* Mobile focused viewport */
+  margin: 0 auto;
+  padding: 1rem 0.85rem calc(5.75rem + env(safe-area-inset-bottom, 16px)) 0.85rem;
+  flex: 1;
+}
+
+@media (min-width: 768px) {
+  .app-container {
+    max-width: 520px;
+    padding-top: 1.5rem;
+  }
+}
+
+/* Focus styles */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--sky-400);
+  outline-offset: 2px;
+}

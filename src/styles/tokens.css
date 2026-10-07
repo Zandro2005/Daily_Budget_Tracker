@@ -1,0 +1,100 @@
+:root {
+  /* Cute Cinnamoroll-inspired Pastel Sky Palette */
+  --sky-50: #F4F9FD;
+  --sky-100: #E6F3FB;
+  --sky-200: #CEE7F8;
+  --sky-300: #B2DAF5;
+  --sky-400: #7EC1F1;
+  --sky-500: #55A8E8;
+  --sky-600: #3488CB;
+
+  --cloud-white: #FFFFFF;
+  --cloud-cream: #FFFDF9;
+  --blush-pink: #FFB7D2;
+  --blush-deep: #FF85B3;
+  --mint-green: #9CE3C0;
+  --mint-deep: #56C190;
+  --star-yellow: #FFE58F;
+  --peach-orange: #FFD29D;
+  --coral-alert: #FF7B89;
+  --lavender-soft: #DDD6FE;
+
+  --navy-900: #1E293B;
+  --navy-800: #2C3E5A;
+  --navy-700: #42587A;
+  --navy-600: #627796;
+  --navy-400: #93A7C1;
+  --navy-200: #D8E3EF;
+
+  /* Theme Tokens - Default Light (Day Sky) */
+  --bg-page: linear-gradient(180deg, #E1F1FC 0%, #EDF6FD 30%, #F8FBFE 70%, #FFF5F7 100%);
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-card-cloud: rgba(255, 255, 255, 0.96);
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --bg-input: #F3F8FC;
+  --border-color: rgba(182, 218, 245, 0.6);
+  --border-strong: rgba(135, 195, 237, 0.85);
+
+  --text-main: #24344E;
+  --text-secondary: #576F8F;
+  --text-muted: #8AA1BE;
+  --text-inverse: #FFFFFF;
+
+  --primary: var(--sky-500);
+  --primary-hover: var(--sky-600);
+  --primary-light: var(--sky-100);
+  --accent: var(--blush-pink);
+  --accent-hover: var(--blush-deep);
+  --success: var(--mint-deep);
+  --warning: #F59E0B;
+  --danger: var(--coral-alert);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(100, 160, 210, 0.12);
+  --shadow-md: 0 8px 24px -4px rgba(85, 150, 205, 0.18), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 16px 36px -6px rgba(70, 140, 200, 0.25), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-cloud: 0 14px 34px -4px rgba(115, 175, 225, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+  --shadow-pop: 0 10px 0 #3488CB;
+
+  /* Border Radii */
+  --radius-xs: 8px;
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-xl: 36px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-display: 'Fredoka', 'Quicksand', -apple-system, sans-serif;
+  --font-body: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Spacing */
+  --header-height: 72px;
+  --nav-bar-height: 76px;
+  --max-content-width: 1040px;
+}
+
+/* Night Sky Mode (Dreamy Twilight & Soft Stars) */
+[data-theme="night"] {
+  --bg-page: linear-gradient(180deg, #121829 0%, #1A223B 40%, #242444 80%, #2C213D 100%);
+  --bg-card: rgba(30, 39, 66, 0.92);
+  --bg-card-cloud: rgba(36, 48, 80, 0.96);
+  --bg-glass: rgba(26, 35, 60, 0.8);
+  --bg-input: #182033;
+  --border-color: rgba(98, 128, 180, 0.35);
+  --border-strong: rgba(142, 185, 245, 0.55);
+
+  --text-main: #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted: #8899B5;
+
+  --primary: #63B3ED;
+  --primary-hover: #90CDF4;
+  --primary-light: #1E3A5F;
+  --accent: #F472B6;
+
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 26px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+  --shadow-cloud: 0 14px 34px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}

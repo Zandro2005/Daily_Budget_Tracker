@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="skyGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#EBF7FD"/>
+      <stop offset="100%" stop-color="#B8E1F8"/>
+    </radialGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#8BBEE4" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- Background soft circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#skyGrad)"/>
+  
+  <!-- Cloud Mascot Body -->
+  <g filter="url(#softGlow)">
+    <path d="M40 82 C30 82 22 74 22 64 C22 55 28 47 37 46 C41 33 53 24 67 24 C82 24 94 34 97 48 C105 49 111 56 111 65 C111 74 103 82 93 82 Z" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Blush cheeks -->
+  <ellipse cx="44" cy="62" rx="5" ry="3" fill="#FFAEC9" opacity="0.8"/>
+  <ellipse cx="84" cy="62" rx="5" ry="3" fill="#FFAEC9" opacity="0.8"/>
+
+  <!-- Eyes -->
+  <circle cx="49" cy="55" r="3.5" fill="#3A4D6B"/>
+  <circle cx="50.5" cy="53.5" r="1.2" fill="#FFFFFF"/>
+  <circle cx="79" cy="55" r="3.5" fill="#3A4D6B"/>
+  <circle cx="80.5" cy="53.5" r="1.2" fill="#FFFFFF"/>
+
+  <!-- Happy Smile -->
+  <path d="M60 62 Q64 66 68 62" stroke="#3A4D6B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+
+  <!-- Baby Blue Bow -->
+  <g transform="translate(64, 76)">
+    <polygon points="-8,-4 0,-1 -8,2" fill="#88C7F7"/>
+    <polygon points="8,-4 0,-1 8,2" fill="#88C7F7"/>
+    <ellipse cx="0" cy="-1" rx="2.5" ry="2.5" fill="#58A8E8"/>
+  </g>
+</svg>
