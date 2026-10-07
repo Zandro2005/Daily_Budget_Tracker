@@ -1,14 +1,17 @@
 # ☁️ Cloudy Budget — Joyful Cinnamoroll Expense Tracker
 
-A cheerful, interactive Cinnamoroll-inspired budget tracker crafted for busy adults. Designed for quick 3-tap logging, crystal-clear monthly overview at a glance, and joyful micro-interactions.
+A cheerful, interactive Cinnamoroll-inspired budget tracker crafted for Lyka. Designed for quick 3-tap logging, crystal-clear monthly overview at a glance, and joyful micro-interactions with **realtime multi-device cloud sync** powered by Firebase.
 
 ---
 
 ## ✨ Features
 
-- **📱 Streamlined Mobile Experience (iPhone & Android)**: Focused 4-tab bottom navigation bar (`Home`, `Planner`, `History`, `Settings`) with an elevated center `+` Quick Add button and native safe-area-inset padding.
+- **📱 Streamlined Mobile & Desktop Experience**: Focused 4-tab bottom navigation bar (`Home`, `Planner`, `History`, `Settings`) with an elevated center `+` Quick Add button and native safe-area-inset padding.
+- **🔥 Realtime Multi-Device Sync (Firebase Cloud Firestore)**:
+  - **Zero-Login Simplicity**: Open the app on your phone, laptop, or tablet—any expense you add appears on all devices instantly in real-time!
+  - **100% Offline-Resilient**: Keep adding expenses without internet; changes sync automatically when back online via Firestore's multi-tab IndexedDB cache.
 - **🗓️ Dedicated Budget Planner**: 
-  - **Daily Safe Spending Allowance**: Real-time calculation (`₱X / day`) based on days remaining so busy adults know exactly how much they can safely spend today.
+  - **Daily Safe Spending Allowance**: Real-time calculation (`₱X / day`) based on days remaining so you know exactly how much you can safely spend today.
   - **1-Tap 50/30/20 Smart Rule**: Instantly balances 50% Needs, 30% Wants, and 20% Savings.
   - **Category Envelopes**: Clear planned vs. actual spent progress meters with quick limit adjustments.
 - **🐾 Interactive Cloud Puppy Mascot**: Dynamic mood changes based on budget usage (😊 *Happy* < 70%, 😳 *Worried* 70–100%, 😢 *Sad* over budget, 🎉 *Celebrating* on goal completion). Tap the mascot anytime for cute speech bubbles and gentle puppy chirps!
@@ -16,9 +19,7 @@ A cheerful, interactive Cinnamoroll-inspired budget tracker crafted for busy adu
 - **📋 Clean Activity Ledger**: Search, filter, delete with instant Undo toast, and CSV export.
 - **🔊 Joyful Synthesizer SFX**: Native Web Audio sound effects (bubble pops, coin chimes, fanfare) that work 100% offline without external assets.
 - **🌙 Day & Night Sky Modes**: Soft sky blue day theme and dreamy lavender twilight night mode.
-- **💾 Dual Database Support**:
-  - **Zero-config Local Mode (Active by default)**: All data is instantly saved in your browser localStorage.
-  - **Supabase Cloud Sync**: Link your free Supabase database in Settings for seamless multi-device sync across your phone and PC.
+- **📦 Data Backup & Restore**: Export complete JSON backups and CSV sheets anytime with 1-click restore.
 
 ---
 
@@ -28,37 +29,34 @@ A cheerful, interactive Cinnamoroll-inspired budget tracker crafted for busy adu
    ```bash
    npm install
    ```
-2. **Start the development server**:
+
+2. **Configure Firebase (Optional for local testing)**:
+   Copy `.env.example` to `.env` and fill in your Firebase project values:
+   ```bash
+   cp .env.example .env
+   ```
+   *(Or simply run the app and paste your Firebase keys directly in the Settings tab!)*
+
+3. **Start the development server**:
    ```bash
    npm run dev
    ```
    Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-3. **Build for production**:
+4. **Build for production**:
    ```bash
    npm run build
    ```
 
 ---
 
-## 🌐 Deploying to Netlify (Free & Easy)
+## 🌐 Deploying to Firebase Hosting
 
-1. Push this project to your GitHub repository.
-2. Go to [Netlify](https://app.netlify.com) and click **"Add new site"** &rarr; **"Import an existing project"**.
-3. Select your GitHub repository.
-4. Netlify will automatically detect the settings from [`netlify.toml`](./netlify.toml):
-   - **Build command**: `npm run build`
-   - **Publish directory**: `dist`
-5. Click **"Deploy site"**! Your site is live in seconds.
+Deploy your app with one single command:
 
----
+```bash
+npm run deploy
+```
 
-## 🗄️ Optional: Connecting Supabase (Cloud Sync)
-
-If you'd like your budget to sync across your phone and laptop:
-
-1. Create a free account at [Supabase](https://supabase.com).
-2. Create a new project.
-3. In the Supabase dashboard, go to the **SQL Editor**, open [`supabase/schema.sql`](./supabase/schema.sql), paste it, and click **Run**.
-4. Copy your **Project URL** and **Anon Key** from *Project Settings &rarr; API*.
-5. In your Cloudy Budget app, go to **Settings (⚙️)**, paste your keys in the **Supabase Cloud Sync** box, and click **Save Cloud Keys**!
+Your live web app will be available worldwide at:
+`https://<your-project-id>.web.app`

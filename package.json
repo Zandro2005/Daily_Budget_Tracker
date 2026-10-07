@@ -6,14 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "vite build && npx firebase-tools deploy"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1",
     "canvas-confetti": "^1.9.4",
-    "chart.js": "^4.4.8"
+    "chart.js": "^4.4.8",
+    "firebase": "^12.19.0"
   },
   "devDependencies": {
+    "firebase-tools": "^15.32.1",
     "vite": "^6.2.0"
   }
 }

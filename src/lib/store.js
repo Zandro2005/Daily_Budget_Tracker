@@ -1,10 +1,21 @@
 // ====================================================================
 // CLOUDY BUDGET - CENTRAL REACTIVE STORE
-// Reliable local storage by default + Supabase sync when enabled
+// Reliable local storage by default + Cloud Firestore Realtime Sync
+// Designed for seamless multi-device live updates with zero-login
 // ====================================================================
 
 import { getTodayDateString, getCurrentMonthKey } from './format.js';
-import { getSupabase, isSupabaseConfigured } from './supabase.js';
+import { getDb, isFirebaseConfigured } from './firebase.js';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  writeBatch,
+  getDocs,
+} from 'firebase/firestore';
 
 const STORAGE_KEYS = {
   CATEGORIES: 'cloudy_categories_v1',
@@ -12,6 +23,15 @@ const STORAGE_KEYS = {
   RECURRING: 'cloudy_recurring_v1',
   GOALS: 'cloudy_goals_v1',
   SETTINGS: 'cloudy_settings_v1',
+  FIREBASE_INITIALIZED: 'cloudy_fb_seeded_v1',
+};
+
+const FS_COLLECTIONS = {
+  CATEGORIES: 'cloudy_categories',
+  TRANSACTIONS: 'cloudy_transactions',
+  RECURRING: 'cloudy_recurring',
+  GOALS: 'cloudy_goals',
+  SETTINGS: 'cloudy_settings',
 };
 
 const DEFAULT_CATEGORIES = [
@@ -133,6 +153,10 @@ const DEFAULT_GOALS = [
 class BudgetStore {
   constructor() {
     this.listeners = new Set();
+    this.unsubscribers = [];
+    this.isCloudSyncActive = false;
+
+    // Load initial fast state from localStorage
     this.categories = this.load(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
     this.transactions = this.load(STORAGE_KEYS.TRANSACTIONS, getSampleTransactions());
     this.recurring = this.load(STORAGE_KEYS.RECURRING, DEFAULT_RECURRING);
@@ -141,6 +165,9 @@ class BudgetStore {
 
     // Apply stored theme on init
     this.applyTheme(this.settings.theme);
+
+    // Initialize Firebase Realtime Listeners if configured
+    this.initFirebase();
   }
 
   load(key, fallback) {
@@ -176,6 +203,145 @@ class BudgetStore {
     });
   }
 
+  // --- FIREBASE REALTIME SETUP ---
+  initFirebase() {
+    if (!isFirebaseConfigured()) {
+      this.isCloudSyncActive = false;
+      return;
+    }
+
+    const db = getDb();
+    if (!db) return;
+
+    // Unsubscribe previous listeners if any
+    this.unsubscribers.forEach(unsub => {
+      try { unsub(); } catch (_) {}
+    });
+    this.unsubscribers = [];
+
+    try {
+      // 1. Categories Realtime Listener
+      const unsubCat = onSnapshot(collection(db, FS_COLLECTIONS.CATEGORIES), (snapshot) => {
+        if (!snapshot.empty) {
+          const remoteCats = [];
+          snapshot.forEach(docSnap => remoteCats.push(docSnap.data()));
+          this.categories = remoteCats;
+          this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+          this.notify();
+        } else {
+          // If Firestore is empty, seed it with current categories
+          this.seedInitialData(db);
+        }
+      }, (err) => console.warn('Categories sync error:', err));
+      this.unsubscribers.push(unsubCat);
+
+      // 2. Transactions Realtime Listener
+      const unsubTx = onSnapshot(collection(db, FS_COLLECTIONS.TRANSACTIONS), (snapshot) => {
+        const remoteTx = [];
+        snapshot.forEach(docSnap => remoteTx.push(docSnap.data()));
+        // Sort newest first
+        remoteTx.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+        this.transactions = remoteTx;
+        this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+        this.notify();
+      }, (err) => console.warn('Transactions sync error:', err));
+      this.unsubscribers.push(unsubTx);
+
+      // 3. Recurring Realtime Listener
+      const unsubRec = onSnapshot(collection(db, FS_COLLECTIONS.RECURRING), (snapshot) => {
+        const remoteRec = [];
+        snapshot.forEach(docSnap => remoteRec.push(docSnap.data()));
+        this.recurring = remoteRec;
+        this.save(STORAGE_KEYS.RECURRING, this.recurring);
+        this.notify();
+      }, (err) => console.warn('Recurring sync error:', err));
+      this.unsubscribers.push(unsubRec);
+
+      // 4. Goals Realtime Listener
+      const unsubGoals = onSnapshot(collection(db, FS_COLLECTIONS.GOALS), (snapshot) => {
+        const remoteGoals = [];
+        snapshot.forEach(docSnap => remoteGoals.push(docSnap.data()));
+        this.goals = remoteGoals;
+        this.save(STORAGE_KEYS.GOALS, this.goals);
+        this.notify();
+      }, (err) => console.warn('Goals sync error:', err));
+      this.unsubscribers.push(unsubGoals);
+
+      // 5. Settings Realtime Listener
+      const unsubSettings = onSnapshot(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), (docSnap) => {
+        if (docSnap.exists()) {
+          const remoteSettings = docSnap.data();
+          // Keep local theme preference so phone and desktop can choose independent dark/light mode
+          const currentTheme = this.settings.theme;
+          this.settings = { ...this.settings, ...remoteSettings, theme: currentTheme };
+          this.save(STORAGE_KEYS.SETTINGS, this.settings);
+          this.notify();
+        }
+      }, (err) => console.warn('Settings sync error:', err));
+      this.unsubscribers.push(unsubSettings);
+
+      this.isCloudSyncActive = true;
+      this.notify();
+    } catch (err) {
+      console.error('Failed to attach Firebase listeners:', err);
+      this.isCloudSyncActive = false;
+    }
+  }
+
+  // Seed default collections if fresh database
+  async seedInitialData(db) {
+    try {
+      const seeded = localStorage.getItem(STORAGE_KEYS.FIREBASE_INITIALIZED);
+      if (seeded) return;
+
+      const batch = writeBatch(db);
+      this.categories.forEach(c => {
+        batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c);
+      });
+      this.transactions.forEach(t => {
+        batch.set(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t);
+      });
+      this.recurring.forEach(r => {
+        batch.set(doc(db, FS_COLLECTIONS.RECURRING, r.id), r);
+      });
+      this.goals.forEach(g => {
+        batch.set(doc(db, FS_COLLECTIONS.GOALS, g.id), g);
+      });
+      batch.set(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), {
+        currency: this.settings.currency,
+        monthlyBudget: this.settings.monthlyBudget,
+        expectedIncome: this.settings.expectedIncome,
+        soundEnabled: this.settings.soundEnabled,
+      });
+
+      await batch.commit();
+      localStorage.setItem(STORAGE_KEYS.FIREBASE_INITIALIZED, 'true');
+    } catch (e) {
+      console.warn('Auto-seed to Firestore notice:', e);
+    }
+  }
+
+  // Push all local data into Firebase manually
+  async pushLocalDataToCloud() {
+    const db = getDb();
+    if (!db) throw new Error('Firebase is not initialized');
+
+    const batch = writeBatch(db);
+    this.categories.forEach(c => batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c));
+    this.transactions.forEach(t => batch.set(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t));
+    this.recurring.forEach(r => batch.set(doc(db, FS_COLLECTIONS.RECURRING, r.id), r));
+    this.goals.forEach(g => batch.set(doc(db, FS_COLLECTIONS.GOALS, g.id), g));
+    batch.set(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), {
+      currency: this.settings.currency,
+      monthlyBudget: this.settings.monthlyBudget,
+      expectedIncome: this.settings.expectedIncome,
+      soundEnabled: this.settings.soundEnabled,
+    });
+
+    await batch.commit();
+    return true;
+  }
+
   // --- SETTINGS & THEME ---
   getSettings() {
     return { ...this.settings };
@@ -187,6 +353,16 @@ class BudgetStore {
     if (partial.theme) {
       this.applyTheme(partial.theme);
     }
+
+    const db = getDb();
+    if (db) {
+      const syncData = { ...this.settings };
+      delete syncData.theme; // Keep theme device-local
+      setDoc(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), syncData, { merge: true }).catch(err => {
+        console.warn('Firestore settings update error:', err);
+      });
+    }
+
     this.notify();
   }
 
@@ -232,7 +408,7 @@ class BudgetStore {
   addTransaction(tx) {
     const category = this.categories.find(c => c.id === tx.categoryId);
     const newTx = {
-      id: 'tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      id: tx.id || ('tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
       type: tx.type || 'expense',
       amount: parseFloat(tx.amount),
       categoryId: tx.categoryId,
@@ -240,12 +416,20 @@ class BudgetStore {
       categoryEmoji: category ? category.emoji : (tx.categoryEmoji || '🏷️'),
       note: tx.note ? tx.note.trim() : '',
       date: tx.date || getTodayDateString(),
-      createdAt: new Date().toISOString(),
+      createdAt: tx.createdAt || new Date().toISOString(),
     };
 
     this.transactions.unshift(newTx);
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      setDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, newTx.id), newTx).catch(err => {
+        console.warn('Firestore add transaction error:', err);
+      });
+    }
+
     return newTx;
   }
 
@@ -266,9 +450,18 @@ class BudgetStore {
       categoryEmoji: category ? category.emoji : (updates.categoryEmoji || this.transactions[idx].categoryEmoji),
     };
 
+    const updated = this.transactions[idx];
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
     this.notify();
-    return this.transactions[idx];
+
+    const db = getDb();
+    if (db) {
+      updateDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, id), updated).catch(err => {
+        console.warn('Firestore update transaction error:', err);
+      });
+    }
+
+    return updated;
   }
 
   deleteTransaction(id) {
@@ -276,6 +469,14 @@ class BudgetStore {
     this.transactions = this.transactions.filter(t => t.id !== id);
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      deleteDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, id)).catch(err => {
+        console.warn('Firestore delete transaction error:', err);
+      });
+    }
+
     return deleted;
   }
 
@@ -286,7 +487,7 @@ class BudgetStore {
 
   addCategory(cat) {
     const newCat = {
-      id: 'cat-' + Date.now(),
+      id: cat.id || ('cat-' + Date.now()),
       name: cat.name.trim(),
       emoji: cat.emoji || '🏷️',
       color: cat.color || '#BFE3F7',
@@ -295,33 +496,66 @@ class BudgetStore {
     this.categories.push(newCat);
     this.save(STORAGE_KEYS.CATEGORIES, this.categories);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      setDoc(doc(db, FS_COLLECTIONS.CATEGORIES, newCat.id), newCat).catch(err => {
+        console.warn('Firestore add category error:', err);
+      });
+    }
+
     return newCat;
   }
 
   updateCategory(id, updates) {
-    const idx = this.categories.find(c => c.id === id);
+    const idx = this.categories.findIndex(c => c.id === id);
     if (idx === -1) return null;
     this.categories[idx] = {
       ...this.categories[idx],
       ...updates,
       monthly_limit: updates.monthly_limit !== undefined ? parseFloat(updates.monthly_limit) : this.categories[idx].monthly_limit,
     };
+    const updated = this.categories[idx];
     this.save(STORAGE_KEYS.CATEGORIES, this.categories);
     this.notify();
-    return this.categories[idx];
+
+    const db = getDb();
+    if (db) {
+      updateDoc(doc(db, FS_COLLECTIONS.CATEGORIES, id), updated).catch(err => {
+        console.warn('Firestore update category error:', err);
+      });
+    }
+
+    return updated;
   }
 
   deleteCategory(id) {
     this.categories = this.categories.filter(c => c.id !== id);
     this.save(STORAGE_KEYS.CATEGORIES, this.categories);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      deleteDoc(doc(db, FS_COLLECTIONS.CATEGORIES, id)).catch(err => {
+        console.warn('Firestore delete category error:', err);
+      });
+    }
   }
 
   updateCategoryLimit(id, limit) {
     const idx = this.categories.findIndex(c => c.id === id);
     if (idx !== -1) {
-      this.categories[idx].monthly_limit = Math.max(0, parseFloat(limit) || 0);
+      const monthly_limit = Math.max(0, parseFloat(limit) || 0);
+      this.categories[idx].monthly_limit = monthly_limit;
       this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+      this.notify();
+
+      const db = getDb();
+      if (db) {
+        updateDoc(doc(db, FS_COLLECTIONS.CATEGORIES, id), { monthly_limit }).catch(err => {
+          console.warn('Firestore limit update error:', err);
+        });
+      }
     }
   }
 
@@ -377,7 +611,7 @@ class BudgetStore {
 
   addRecurring(item) {
     const newItem = {
-      id: 'rec-' + Date.now(),
+      id: item.id || ('rec-' + Date.now()),
       name: item.name.trim(),
       amount: parseFloat(item.amount),
       categoryId: item.categoryId,
@@ -389,6 +623,14 @@ class BudgetStore {
     this.recurring.push(newItem);
     this.save(STORAGE_KEYS.RECURRING, this.recurring);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      setDoc(doc(db, FS_COLLECTIONS.RECURRING, newItem.id), newItem).catch(err => {
+        console.warn('Firestore add recurring error:', err);
+      });
+    }
+
     return newItem;
   }
 
@@ -415,6 +657,14 @@ class BudgetStore {
 
     this.save(STORAGE_KEYS.RECURRING, this.recurring);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      updateDoc(doc(db, FS_COLLECTIONS.RECURRING, id), { nextDue: item.nextDue }).catch(err => {
+        console.warn('Firestore recurring update error:', err);
+      });
+    }
+
     return item;
   }
 
@@ -422,6 +672,13 @@ class BudgetStore {
     this.recurring = this.recurring.filter(r => r.id !== id);
     this.save(STORAGE_KEYS.RECURRING, this.recurring);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      deleteDoc(doc(db, FS_COLLECTIONS.RECURRING, id)).catch(err => {
+        console.warn('Firestore delete recurring error:', err);
+      });
+    }
   }
 
   // --- SAVINGS GOALS ---
@@ -431,7 +688,7 @@ class BudgetStore {
 
   addGoal(goal) {
     const newGoal = {
-      id: 'goal-' + Date.now(),
+      id: goal.id || ('goal-' + Date.now()),
       name: goal.name.trim(),
       targetAmount: parseFloat(goal.targetAmount),
       currentAmount: parseFloat(goal.currentAmount || 0),
@@ -442,6 +699,14 @@ class BudgetStore {
     this.goals.push(newGoal);
     this.save(STORAGE_KEYS.GOALS, this.goals);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      setDoc(doc(db, FS_COLLECTIONS.GOALS, newGoal.id), newGoal).catch(err => {
+        console.warn('Firestore add goal error:', err);
+      });
+    }
+
     return newGoal;
   }
 
@@ -459,6 +724,17 @@ class BudgetStore {
 
     this.save(STORAGE_KEYS.GOALS, this.goals);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      updateDoc(doc(db, FS_COLLECTIONS.GOALS, id), {
+        currentAmount: goal.currentAmount,
+        isCompleted: goal.isCompleted,
+      }).catch(err => {
+        console.warn('Firestore goal contribution error:', err);
+      });
+    }
+
     return goal;
   }
 
@@ -466,6 +742,13 @@ class BudgetStore {
     this.goals = this.goals.filter(g => g.id !== id);
     this.save(STORAGE_KEYS.GOALS, this.goals);
     this.notify();
+
+    const db = getDb();
+    if (db) {
+      deleteDoc(doc(db, FS_COLLECTIONS.GOALS, id)).catch(err => {
+        console.warn('Firestore delete goal error:', err);
+      });
+    }
   }
 
   // --- SUMMARY COMPUTATIONS ---
@@ -495,10 +778,6 @@ class BudgetStore {
       budgetLimit,
       remainingBudget,
       usagePercent,
-      // Mood rating for mascot:
-      // happy: < 70% used
-      // worried: 70% to 100% used
-      // sad: > 100% used (over budget)
       mood: usagePercent > 100 ? 'sad' : usagePercent >= 70 ? 'worried' : 'happy',
     };
   }
@@ -522,7 +801,6 @@ class BudgetStore {
       spendMap[catId].total += t.amount;
     });
 
-    // Merge with defined categories to get limits and colors
     return this.categories
       .filter(c => c.monthly_limit > 0 || spendMap[c.id])
       .map(cat => {
@@ -563,7 +841,7 @@ class BudgetStore {
 
   exportJSON() {
     const backup = {
-      version: '1.0',
+      version: '2.0',
       exportedAt: new Date().toISOString(),
       categories: this.categories,
       transactions: this.transactions,
@@ -597,6 +875,10 @@ class BudgetStore {
 
       this.applyTheme(this.settings.theme);
       this.notify();
+
+      if (isFirebaseConfigured()) {
+        this.pushLocalDataToCloud().catch(err => console.warn('Cloud import sync error:', err));
+      }
       return true;
     } catch (e) {
       console.error('Import failed:', e);
@@ -619,6 +901,10 @@ class BudgetStore {
 
     this.applyTheme(this.settings.theme);
     this.notify();
+
+    if (isFirebaseConfigured()) {
+      this.pushLocalDataToCloud().catch(err => console.warn('Demo reset cloud sync error:', err));
+    }
   }
 }
 

@@ -10,7 +10,6 @@ import './styles/animations.css';
 import { store } from './lib/store.js';
 import { playPop, playPuppyChirp } from './lib/audio.js';
 import { openQuickAddModal } from './components/quickAddModal.js';
-import { isSupabaseConfigured } from './lib/supabase.js';
 
 // Views
 import { renderDashboard } from './views/dashboard.js';

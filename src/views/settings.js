@@ -1,16 +1,15 @@
 // ====================================================================
 // CLOUDY BUDGET - SETTINGS & SYNC VIEW
-// Preferences, Supabase Cloud configuration, and Backup/Restore
+// Preferences, Firebase Cloud configuration, and Backup/Restore
 // ====================================================================
 
 import { store } from '../lib/store.js';
 import { playPop, playCoin, isSoundEnabled, setSoundEnabled } from '../lib/audio.js';
-import { 
-  getSupabaseCredentials, 
-  configureSupabase, 
-  testSupabaseConnection, 
-  isSupabaseConfigured 
-} from '../lib/supabase.js';
+import {
+  getFirebaseConfig,
+  saveFirebaseConfig,
+  isFirebaseConfigured
+} from '../lib/firebase.js';
 import { showToast } from '../components/toast.js';
 
 export function renderSettings() {
@@ -20,8 +19,8 @@ export function renderSettings() {
   function renderContent() {
     container.innerHTML = '';
     const settings = store.getSettings();
-    const creds = getSupabaseCredentials();
-    const isCloudConnected = isSupabaseConfigured();
+    const fbConfig = getFirebaseConfig();
+    const isCloudConnected = isFirebaseConfigured();
 
     // Header
     const header = document.createElement('div');
@@ -31,7 +30,7 @@ export function renderSettings() {
         <span>⚙️</span> Cloud Preferences & Sync
       </h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">
-        Personalize your budget, manage cloud sync, and backup data
+        Personalize your budget, manage realtime Firebase sync, and backup data
       </p>
     `;
     container.appendChild(header);
@@ -104,89 +103,112 @@ export function renderSettings() {
 
     container.appendChild(prefCard);
 
-    // 2. Supabase Database Sync Card
+    // 2. Firebase Database Sync Card
     const dbCard = document.createElement('div');
     dbCard.className = 'cloud-card';
     dbCard.style.marginBottom = '1.5rem';
     dbCard.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
         <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-          <span>⚡</span> Supabase Cloud Sync
+          <span>🔥</span> Firebase Realtime Cloud Sync
         </h3>
         <span class="pill" style="background: ${isCloudConnected ? 'var(--mint-green)' : 'var(--sky-100)'}; color: var(--navy-800);">
-          ${isCloudConnected ? '🟢 Connected to Cloud' : '🟡 Offline Local Mode (Ready)'}
+          ${isCloudConnected ? '🟢 Realtime Cloud Sync Active' : '🟡 Offline Local Mode (Ready)'}
         </span>
       </div>
 
       <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.25rem;">
-        By default, your budget is 100% saved in your browser (no account needed). To sync across your phone and laptop, link your free <strong>Supabase</strong> project below:
+        Your budget syncs seamlessly across your phone, laptop, and tablet with <strong>zero login required</strong>! Enter your Firebase configuration below or provide it in your environment variables:
       </p>
 
-      <div class="form-group">
-        <label class="form-label">Supabase Project URL</label>
-        <input type="url" id="sb-url" class="form-input" placeholder="https://xyzcompany.supabase.co" value="${creds ? creds.url : ''}">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1rem;">
+        <div class="form-group">
+          <label class="form-label">Project ID</label>
+          <input type="text" id="fb-project-id" class="form-input" placeholder="lyka-budget-tracker" value="${fbConfig ? (fbConfig.projectId || '') : ''}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">API Key</label>
+          <input type="password" id="fb-api-key" class="form-input" placeholder="AIzaSy..." value="${fbConfig ? (fbConfig.apiKey || '') : ''}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">App ID</label>
+          <input type="text" id="fb-app-id" class="form-input" placeholder="1:123456789:web:abcdef" value="${fbConfig ? (fbConfig.appId || '') : ''}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Auth Domain (optional)</label>
+          <input type="text" id="fb-auth-domain" class="form-input" placeholder="project-id.firebaseapp.com" value="${fbConfig ? (fbConfig.authDomain || '') : ''}">
+        </div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Supabase Anon Key</label>
-        <input type="password" id="sb-key" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="${creds ? creds.key : ''}">
-      </div>
-
-      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-        <button class="btn btn-secondary squish-btn" id="sb-test-btn">
-          <span>🔍</span> Test Connection
-        </button>
-        <button class="btn btn-primary squish-btn" id="sb-save-btn">
-          <span>☁️</span> Save Cloud Keys
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+        <button class="btn btn-primary squish-btn" id="fb-save-btn">
+          <span>☁️</span> Connect Firebase
         </button>
         ${isCloudConnected ? `
-          <button class="btn btn-danger squish-btn" id="sb-disconnect-btn">
+          <button class="btn btn-secondary squish-btn" id="fb-sync-now-btn">
+            <span>⬆️</span> Sync Local Data to Cloud
+          </button>
+          <button class="btn btn-danger squish-btn" id="fb-disconnect-btn">
             Disconnect
           </button>
         ` : ''}
       </div>
 
-      <div id="sb-status-box" style="margin-top: 1rem; font-size: 0.85rem; font-weight: 700;"></div>
+      <div id="fb-status-box" style="margin-top: 1rem; font-size: 0.85rem; font-weight: 700;"></div>
     `;
 
-    dbCard.querySelector('#sb-test-btn').onclick = async () => {
+    dbCard.querySelector('#fb-save-btn').onclick = () => {
       playPop();
-      const url = dbCard.querySelector('#sb-url').value.trim();
-      const key = dbCard.querySelector('#sb-key').value.trim();
-      const statusBox = dbCard.querySelector('#sb-status-box');
+      const projectId = dbCard.querySelector('#fb-project-id').value.trim();
+      const apiKey = dbCard.querySelector('#fb-api-key').value.trim();
+      const appId = dbCard.querySelector('#fb-app-id').value.trim();
+      const authDomain = dbCard.querySelector('#fb-auth-domain').value.trim() || `${projectId}.firebaseapp.com`;
+      const statusBox = dbCard.querySelector('#fb-status-box');
 
-      if (!url || !key) {
-        statusBox.innerHTML = '<span style="color: var(--danger);">Please enter both Supabase URL and Anon Key!</span>';
+      if (!projectId || !apiKey) {
+        statusBox.innerHTML = '<span style="color: var(--danger);">Please enter both Project ID and API Key!</span>';
         return;
       }
 
-      statusBox.innerHTML = '<span>Checking connection... ☁️</span>';
-      const res = await testSupabaseConnection(url, key);
-      if (res.success) {
-        statusBox.innerHTML = '<span style="color: var(--mint-deep);">✓ Successfully connected to Supabase!</span>';
-      } else {
-        statusBox.innerHTML = `<span style="color: var(--danger);">✕ Connection failed: ${res.message}</span>`;
-      }
+      const config = {
+        projectId,
+        apiKey,
+        appId,
+        authDomain,
+        storageBucket: `${projectId}.appspot.com`,
+      };
+
+      saveFirebaseConfig(config);
+      store.initFirebase();
+      playCoin();
+      showToast({ text: 'Firebase connected! ☁️ Live sync active.', icon: '✨' });
+      renderContent();
     };
 
-    dbCard.querySelector('#sb-save-btn').onclick = () => {
-      const url = dbCard.querySelector('#sb-url').value.trim();
-      const key = dbCard.querySelector('#sb-key').value.trim();
+    if (dbCard.querySelector('#fb-sync-now-btn')) {
+      dbCard.querySelector('#fb-sync-now-btn').onclick = async () => {
+        playPop();
+        const statusBox = dbCard.querySelector('#fb-status-box');
+        statusBox.innerHTML = '<span>Syncing local data to Firebase cloud... ☁️</span>';
+        try {
+          await store.pushLocalDataToCloud();
+          playCoin();
+          statusBox.innerHTML = '<span style="color: var(--mint-deep);">✓ All local budget data synced to Cloud!</span>';
+          showToast({ text: 'Cloud sync complete! ☁️', icon: '✨' });
+        } catch (err) {
+          statusBox.innerHTML = `<span style="color: var(--danger);">✕ Sync error: ${err.message}</span>`;
+        }
+      };
+    }
 
-      if (url && key) {
-        configureSupabase(url, key);
-        playCoin();
-        showToast({ text: 'Cloud keys saved! ☁️', icon: '✨' });
-        renderContent();
-      }
-    };
-
-    if (dbCard.querySelector('#sb-disconnect-btn')) {
-      dbCard.querySelector('#sb-disconnect-btn').onclick = () => {
-        if (confirm('Disconnect from Supabase and use local browser storage?')) {
-          configureSupabase(null, null);
-          showToast({ text: 'Switched to local offline mode' });
-          renderContent();
+    if (dbCard.querySelector('#fb-disconnect-btn')) {
+      dbCard.querySelector('#fb-disconnect-btn').onclick = () => {
+        if (confirm('Disconnect from Firebase and use local browser storage only?')) {
+          saveFirebaseConfig(null);
+          location.reload();
         }
       };
     }
@@ -201,7 +223,7 @@ export function renderSettings() {
         <span>📦</span> Data Backup & Restore
       </h3>
       <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
-        Export your complete data anytime so you never lose your records.
+        Export your complete data anytime so you always keep your records.
       </p>
 
       <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
@@ -241,7 +263,7 @@ export function renderSettings() {
       reader.onload = (event) => {
         const success = store.importJSON(event.target.result);
         if (success) {
-          playSuccess();
+          playCoin();
           showToast({ text: 'Data restored successfully! 🎉', icon: '🌟' });
           renderContent();
         } else {
@@ -254,7 +276,7 @@ export function renderSettings() {
     backupCard.querySelector('#reset-demo-btn').onclick = () => {
       if (confirm('Reset to starter demo data? This will overwrite existing records.')) {
         store.resetToDemoData();
-        playSuccess();
+        playCoin();
         showToast({ text: 'Reset to fresh demo data! ☁️' });
         renderContent();
       }
