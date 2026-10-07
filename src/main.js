@@ -55,8 +55,8 @@ function initApp() {
       <!-- App Header -->
       <header class="app-header">
         <a href="#dashboard" class="brand" id="brand-link">
-          <img src="/assets/mascot/happy.jpg" class="brand-avatar" alt="Cloudy Mascot">
-          <div class="brand-title">Cloudy Budget <span style="font-size: 1rem;">☁️</span></div>
+          <img src="/assets/mascot/happy.jpg" class="brand-avatar" alt="Lyka Wallet Mascot">
+          <div class="brand-title">Lyka Wallet <span style="font-size: 1rem;">☁️</span></div>
         </a>
 
         <div class="header-controls">
