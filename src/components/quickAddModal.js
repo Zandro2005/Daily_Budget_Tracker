@@ -45,6 +45,9 @@ function resetModalState(type = 'expense') {
   const form = modalInstance.querySelector('#qa-form');
   if (form) form.reset();
 
+  const dialog = modalInstance.querySelector('.modal-dialog');
+  if (dialog) dialog.scrollTop = 0;
+
   const typeButtons = modalInstance.querySelectorAll('.qa-type-btn');
   typeButtons.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.type === type);
@@ -77,6 +80,11 @@ function renderCategoryChips(type, root = modalInstance) {
     // Clean text name without emoji
     pill.textContent = cat.name;
 
+    // Span full width if odd item at the end for symmetry
+    if (displayList.length % 2 === 1 && index === displayList.length - 1) {
+      pill.style.gridColumn = '1 / -1';
+    }
+
     pill.addEventListener('click', (e) => {
       e.preventDefault();
       playPop();
@@ -97,12 +105,12 @@ function createModalDOM() {
 
   backdrop.innerHTML = `
     <div class="modal-dialog">
-      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 class="modal-title" style="font-size: 1.15rem; font-weight: 700; margin: 0;">Add Transaction</h3>
+      <div class="modal-header">
+        <h3 class="modal-title">Add Transaction</h3>
         <button class="modal-close" id="qa-close-btn" type="button" aria-label="Close">&times;</button>
       </div>
 
-      <!-- Clean Type Switcher (No Emojis) -->
+      <!-- Symmetrical 50/50 Type Switcher (No Emojis) -->
       <div class="qa-type-toggle">
         <button type="button" class="qa-type-btn ${currentSelectedType === 'expense' ? 'active' : ''}" data-type="expense">
           Expense
@@ -113,53 +121,50 @@ function createModalDOM() {
       </div>
 
       <form id="qa-form">
-        <!-- Clean Amount Input -->
-        <div class="qa-amount-wrap">
-          <span class="qa-currency">${curr}</span>
-          <input 
-            type="number" 
-            id="qa-amount" 
-            class="qa-amount-input" 
-            placeholder="0.00" 
-            step="any" 
-            inputmode="decimal" 
-            required
-          >
+        <!-- Centered Hero Amount Input -->
+        <div class="qa-field-group">
+          <label class="form-label" for="qa-amount">Amount</label>
+          <div class="qa-amount-wrap">
+            <div class="qa-amount-inner">
+              <span class="qa-currency">${curr}</span>
+              <input 
+                type="number" 
+                id="qa-amount" 
+                class="qa-amount-input" 
+                placeholder="0.00" 
+                step="any" 
+                inputmode="decimal" 
+                required
+              >
+            </div>
+          </div>
         </div>
 
-        <!-- Clean Category Choices (Text Pills, No Emojis) -->
+        <!-- Symmetrical 2-Column Categories (Clean Text, No Emojis) -->
         <div class="qa-cat-wrap">
           <label class="form-label">Category</label>
           <div id="qa-category-list" class="qa-cat-list"></div>
         </div>
 
-        <!-- Note & Date (Contained & Simple) -->
-        <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 0.5rem; margin-bottom: 1.15rem;">
+        <!-- Symmetrical 50/50 Note & Date Grid -->
+        <div class="qa-row-grid">
           <div>
-            <label class="form-label">Note (optional)</label>
+            <label class="form-label" for="qa-note">Note (optional)</label>
             <input type="text" id="qa-note" class="form-input" placeholder="e.g. Groceries">
           </div>
           <div>
-            <label class="form-label">Date</label>
+            <label class="form-label" for="qa-date">Date</label>
             <input type="date" id="qa-date" class="form-input" value="${getTodayDateString()}">
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.75rem; font-size: 0.95rem;">
-          Save
+        <!-- Balanced Full-Width Save Button -->
+        <button type="submit" class="qa-submit-btn squish-btn">
+          Save Transaction
         </button>
       </form>
     </div>
   `;
-
-  // Auto-scroll input into view on virtual keyboard focus
-  backdrop.querySelectorAll('input').forEach(input => {
-    input.addEventListener('focus', () => {
-      setTimeout(() => {
-        input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 350);
-    });
-  });
 
   // Close handlers
   backdrop.addEventListener('click', (e) => {
