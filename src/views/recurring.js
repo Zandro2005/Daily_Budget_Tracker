@@ -172,7 +172,7 @@ export function renderRecurring() {
     modalBackdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title"><span>⚡ New Subscription / Bill</span></h3>
+          <h3 class="modal-title">New Subscription</h3>
           <button class="modal-close" id="bill-modal-close">&times;</button>
         </div>
         <form id="bill-form">
@@ -187,7 +187,7 @@ export function renderRecurring() {
           <div class="form-group">
             <label class="form-label">Category</label>
             <select id="bill-cat" class="form-select">
-              ${categories.map(c => `<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('')}
+              ${categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">

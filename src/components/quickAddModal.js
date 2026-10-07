@@ -1,5 +1,6 @@
 // ====================================================================
-// CLOUDY BUDGET - QUICK ADD MODAL (3-Tap Fast Logger)
+// LYKA WALLET - SIMPLE QUICK ADD MODAL
+// Clean, elegant logger with no emojis on choices & contained width
 // ====================================================================
 
 import { store } from '../lib/store.js';
@@ -9,6 +10,7 @@ import { firePastelConfetti } from '../lib/confetti.js';
 import { showToast } from './toast.js';
 
 let modalInstance = null;
+let currentSelectedType = 'expense';
 
 export function openQuickAddModal(initialType = 'expense') {
   try {
@@ -39,11 +41,14 @@ export function closeQuickAddModal() {
 
 function resetModalState(type = 'expense') {
   if (!modalInstance) return;
+  currentSelectedType = type;
   const form = modalInstance.querySelector('#qa-form');
   if (form) form.reset();
 
-  const typeInputs = modalInstance.querySelectorAll('input[name="qa-type"]');
-  typeInputs.forEach(i => (i.checked = i.value === type));
+  const typeButtons = modalInstance.querySelectorAll('.qa-type-btn');
+  typeButtons.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
 
   const dateInput = modalInstance.querySelector('#qa-date');
   if (dateInput) dateInput.value = getTodayDateString();
@@ -53,34 +58,33 @@ function resetModalState(type = 'expense') {
 
 function renderCategoryChips(type, root = modalInstance) {
   if (!root) return;
-  const container = root.querySelector('#qa-category-grid');
+  const container = root.querySelector('#qa-category-list');
   if (!container) return;
   container.innerHTML = '';
 
   const categories = store.getCategories();
-  // Filter appropriate categories (e.g. if income, show income first)
-  const filtered = type === 'income' 
+  const filtered = type === 'income'
     ? categories.filter(c => c.name.toLowerCase().includes('income') || c.monthly_limit === 0)
     : categories.filter(c => !c.name.toLowerCase().includes('income'));
 
   const displayList = filtered.length > 0 ? filtered : categories;
 
   displayList.forEach((cat, index) => {
-    const chip = document.createElement('div');
-    chip.className = `cat-chip ${index === 0 ? 'selected' : ''}`;
-    chip.dataset.id = cat.id;
-    chip.innerHTML = `
-      <span class="cat-emoji">${cat.emoji}</span>
-      <span class="cat-name">${cat.name.split(' ')[0]}</span>
-    `;
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = `qa-cat-pill ${index === 0 ? 'selected' : ''}`;
+    pill.dataset.id = cat.id;
+    // Clean text name without emoji
+    pill.textContent = cat.name;
 
-    chip.addEventListener('click', () => {
+    pill.addEventListener('click', (e) => {
+      e.preventDefault();
       playPop();
-      container.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('selected'));
-      chip.classList.add('selected');
+      container.querySelectorAll('.qa-cat-pill').forEach(c => c.classList.remove('selected'));
+      pill.classList.add('selected');
     });
 
-    container.appendChild(chip);
+    container.appendChild(pill);
   });
 }
 
@@ -89,72 +93,66 @@ function createModalDOM() {
   backdrop.className = 'modal-backdrop';
   modalInstance = backdrop;
 
+  const curr = store.getSettings().currency || '₱';
+
   backdrop.innerHTML = `
-    <div class="modal-dialog" style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 16px));">
-      <div class="modal-header" style="justify-content: center; position: relative; margin-bottom: 0.75rem;">
-        <h3 class="modal-title" style="font-size: 1.1rem;">Quick Add</h3>
-        <button class="modal-close" id="qa-close-btn" style="position: absolute; right: 0;">&times;</button>
+    <div class="modal-dialog">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 class="modal-title" style="font-size: 1.15rem; font-weight: 700; margin: 0;">Add Transaction</h3>
+        <button class="modal-close" id="qa-close-btn" type="button" aria-label="Close">&times;</button>
       </div>
 
-      <!-- Type Switcher -->
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); padding: 4px; border-radius: var(--radius-full);">
-        <label style="flex: 1; text-align: center; cursor: pointer;">
-          <input type="radio" name="qa-type" value="expense" checked style="display: none;">
-          <div class="type-pill-btn active-expense" id="pill-expense" style="padding: 0.4rem; border-radius: var(--radius-full); font-weight: 700; font-size: 0.85rem; transition: all 0.2s; user-select: none;">
-            💸 Expense
-          </div>
-        </label>
-        <label style="flex: 1; text-align: center; cursor: pointer;">
-          <input type="radio" name="qa-type" value="income" style="display: none;">
-          <div class="type-pill-btn" id="pill-income" style="padding: 0.4rem; border-radius: var(--radius-full); font-weight: 700; font-size: 0.85rem; transition: all 0.2s; user-select: none;">
-            💰 Income
-          </div>
-        </label>
+      <!-- Clean Type Switcher (No Emojis) -->
+      <div class="qa-type-toggle">
+        <button type="button" class="qa-type-btn ${currentSelectedType === 'expense' ? 'active' : ''}" data-type="expense">
+          Expense
+        </button>
+        <button type="button" class="qa-type-btn ${currentSelectedType === 'income' ? 'active' : ''}" data-type="income">
+          Income
+        </button>
       </div>
 
       <form id="qa-form">
-        <!-- Amount Input -->
-        <div class="form-group" style="margin-bottom: 0.55rem; text-align: center;">
+        <!-- Clean Amount Input -->
+        <div class="qa-amount-wrap">
+          <span class="qa-currency">${curr}</span>
           <input 
             type="number" 
             id="qa-amount" 
-            class="form-input" 
+            class="qa-amount-input" 
             placeholder="0.00" 
             step="any" 
-            inputmode="decimal"
+            inputmode="decimal" 
             required
-            style="font-size: 1.55rem; font-weight: 800; font-family: var(--font-display); text-align: center; padding: 0.4rem; height: 46px;"
           >
         </div>
 
-        <!-- Quick Amount Presets -->
-        <div class="quick-amount-presets" style="display: flex; justify-content: center; margin-bottom: 0.6rem; gap: 0.3rem; flex-wrap: nowrap;">
-          <button type="button" class="preset-chip" data-add="50" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+50</button>
-          <button type="button" class="preset-chip" data-add="100" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+100</button>
-          <button type="button" class="preset-chip" data-add="200" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+200</button>
-          <button type="button" class="preset-chip" data-add="500" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+500</button>
-          <button type="button" class="preset-chip" data-add="1000" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+1k</button>
+        <!-- Clean Category Choices (Text Pills, No Emojis) -->
+        <div class="qa-cat-wrap">
+          <label class="form-label">Category</label>
+          <div id="qa-category-list" class="qa-cat-list"></div>
         </div>
 
-        <!-- Category Grid -->
-        <div class="form-group" style="margin-bottom: 0.55rem;">
-          <div id="qa-category-grid" class="category-grid"></div>
+        <!-- Note & Date (Contained & Simple) -->
+        <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 0.5rem; margin-bottom: 1.15rem;">
+          <div>
+            <label class="form-label">Note (optional)</label>
+            <input type="text" id="qa-note" class="form-input" placeholder="e.g. Groceries">
+          </div>
+          <div>
+            <label class="form-label">Date</label>
+            <input type="date" id="qa-date" class="form-input" value="${getTodayDateString()}">
+          </div>
         </div>
 
-        <!-- Note & Date -->
-        <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 0.45rem; margin-bottom: 0.7rem;">
-          <input type="text" id="qa-note" class="form-input" style="padding: 0.42rem 0.6rem; font-size: 0.84rem;" placeholder="Note (optional)">
-          <input type="date" id="qa-date" class="form-input" style="padding: 0.42rem 0.45rem; font-size: 0.8rem;" value="${getTodayDateString()}">
-        </div>
-
-        <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.7rem; font-size: 0.95rem; touch-action: manipulation;">
-          Save ✨
+        <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.75rem; font-size: 0.95rem;">
+          Save
         </button>
       </form>
     </div>
   `;
 
-  // Auto-scroll input into view when virtual keyboard pops up
+  // Auto-scroll input into view on virtual keyboard focus
   backdrop.querySelectorAll('input').forEach(input => {
     input.addEventListener('focus', () => {
       setTimeout(() => {
@@ -169,43 +167,16 @@ function createModalDOM() {
   });
   backdrop.querySelector('#qa-close-btn').addEventListener('click', closeQuickAddModal);
 
-  // Type switcher UI update
-  const typeRadios = backdrop.querySelectorAll('input[name="qa-type"]');
-  const pillExpense = backdrop.querySelector('#pill-expense');
-  const pillIncome = backdrop.querySelector('#pill-income');
-
-  function updateTypeUI(val) {
-    if (val === 'expense') {
-      pillExpense.style.background = 'var(--coral-alert)';
-      pillExpense.style.color = '#FFF';
-      pillIncome.style.background = 'transparent';
-      pillIncome.style.color = 'var(--text-muted)';
-    } else {
-      pillIncome.style.background = 'var(--mint-deep)';
-      pillIncome.style.color = '#FFF';
-      pillExpense.style.background = 'transparent';
-      pillExpense.style.color = 'var(--text-muted)';
-    }
-    renderCategoryChips(val, backdrop);
-  }
-
-  typeRadios.forEach(radio => {
-    radio.addEventListener('change', () => {
+  // Type Switcher handler
+  const typeButtons = backdrop.querySelectorAll('.qa-type-btn');
+  typeButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
       playPop();
-      updateTypeUI(radio.value);
-    });
-  });
-  updateTypeUI('expense');
-
-  // Preset chips logic
-  backdrop.querySelectorAll('.preset-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      playPop();
-      const amountInput = backdrop.querySelector('#qa-amount');
-      const addVal = parseFloat(btn.dataset.add) || 0;
-      const current = parseFloat(amountInput.value) || 0;
-      amountInput.value = (current + addVal).toString();
-      amountInput.focus();
+      const nextType = btn.dataset.type;
+      currentSelectedType = nextType;
+      typeButtons.forEach(b => b.classList.toggle('active', b.dataset.type === nextType));
+      renderCategoryChips(nextType, backdrop);
     });
   });
 
@@ -215,8 +186,8 @@ function createModalDOM() {
     const amountVal = parseFloat(backdrop.querySelector('#qa-amount').value);
     if (!amountVal || amountVal <= 0) return;
 
-    const selectedType = backdrop.querySelector('input[name="qa-type"]:checked').value;
-    const selectedCatEl = backdrop.querySelector('.cat-chip.selected');
+    const selectedType = currentSelectedType;
+    const selectedCatEl = backdrop.querySelector('.qa-cat-pill.selected');
     const categoryId = selectedCatEl ? selectedCatEl.dataset.id : null;
     const note = backdrop.querySelector('#qa-note').value;
     const date = backdrop.querySelector('#qa-date').value;
@@ -234,9 +205,9 @@ function createModalDOM() {
       firePastelConfetti();
     }
 
-    const curr = store.getSettings().currency;
+    const currentCurr = store.getSettings().currency || '₱';
     showToast({
-      text: `Saved ${selectedType === 'income' ? '+' : '-'}${curr}${amountVal.toLocaleString()}! ☁️`,
+      text: `Saved ${selectedType === 'income' ? '+' : '-'}${currentCurr}${amountVal.toLocaleString()}! ☁️`,
       icon: selectedType === 'income' ? '🎉' : '✨',
       onUndo: () => {
         store.deleteTransaction(newTx.id);
