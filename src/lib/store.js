@@ -625,9 +625,20 @@ class BudgetStore {
     return newItem;
   }
 
+  isRecurringPaidThisMonth(item) {
+    if (!item) return false;
+    const currentMonth = getCurrentMonthKey();
+    if (item.lastPaidMonth === currentMonth) return true;
+    if (item.nextDue && item.nextDue.slice(0, 7) > currentMonth) return true;
+    return false;
+  }
+
   markRecurringPaid(id) {
-    const item = this.recurring.find(r => r.id === id);
+    const item = this.recurring.find(r => String(r.id) === String(id));
     if (!item) return null;
+
+    const todayStr = getTodayDateString();
+    const currentMonth = getCurrentMonthKey();
 
     // Log the transaction automatically
     const category = this.categories.find(c => c.id === item.categoryId);
@@ -638,21 +649,76 @@ class BudgetStore {
       categoryName: category ? category.name : 'Bills',
       categoryEmoji: category ? category.emoji : '⚡',
       note: `Paid recurring: ${item.name} 🔁`,
-      date: getTodayDateString(),
+      date: todayStr,
     });
 
-    // Advance next due date by 1 month
-    const currentDate = new Date(item.nextDue || getTodayDateString());
-    currentDate.setMonth(currentDate.getMonth() + 1);
-    item.nextDue = currentDate.toISOString().split('T')[0];
+    // Advance next due date by 1 month safely
+    const baseDue = item.nextDue || todayStr;
+    const parts = baseDue.split('-');
+    const curYear = parseInt(parts[0], 10) || new Date().getFullYear();
+    const curMonth = parseInt(parts[1], 10) || (new Date().getMonth() + 1);
+    const curDay = parseInt(parts[2], 10) || item.dueDay || 1;
+
+    // Advance month (+1 in 0-indexed month)
+    const nextDate = new Date(curYear, curMonth, curDay);
+    const nextYear = nextDate.getFullYear();
+    const nextMon = String(nextDate.getMonth() + 1).padStart(2, '0');
+    const nextDay = String(Math.min(curDay, new Date(nextYear, nextDate.getMonth() + 1, 0).getDate())).padStart(2, '0');
+    const nextDue = `${nextYear}-${nextMon}-${nextDay}`;
+
+    item.lastPaid = todayStr;
+    item.lastPaidMonth = currentMonth;
+    item.nextDue = nextDue;
 
     this.save(STORAGE_KEYS.RECURRING, this.recurring);
     this.notify();
 
     const db = getDb();
     if (db) {
-      updateDoc(doc(db, FS_COLLECTIONS.RECURRING, id), { nextDue: item.nextDue }).catch(err => {
+      updateDoc(doc(db, FS_COLLECTIONS.RECURRING, item.id), {
+        lastPaid: todayStr,
+        lastPaidMonth: currentMonth,
+        nextDue: nextDue,
+      }).catch(err => {
         console.warn('Firestore recurring update error:', err);
+      });
+    }
+
+    return item;
+  }
+
+  unmarkRecurringPaid(id) {
+    const item = this.recurring.find(r => String(r.id) === String(id));
+    if (!item) return null;
+
+    const baseDue = item.nextDue || getTodayDateString();
+    const parts = baseDue.split('-');
+    const curYear = parseInt(parts[0], 10) || new Date().getFullYear();
+    const curMonth = parseInt(parts[1], 10) || (new Date().getMonth() + 1);
+    const curDay = parseInt(parts[2], 10) || item.dueDay || 1;
+
+    // Rollback month (-2 in 0-indexed month)
+    const prevDate = new Date(curYear, curMonth - 2, curDay);
+    const prevYear = prevDate.getFullYear();
+    const prevMon = String(prevDate.getMonth() + 1).padStart(2, '0');
+    const prevDay = String(Math.min(curDay, new Date(prevYear, prevDate.getMonth() + 1, 0).getDate())).padStart(2, '0');
+    const prevDue = `${prevYear}-${prevMon}-${prevDay}`;
+
+    item.lastPaid = null;
+    item.lastPaidMonth = null;
+    item.nextDue = prevDue;
+
+    this.save(STORAGE_KEYS.RECURRING, this.recurring);
+    this.notify();
+
+    const db = getDb();
+    if (db) {
+      updateDoc(doc(db, FS_COLLECTIONS.RECURRING, item.id), {
+        lastPaid: null,
+        lastPaidMonth: null,
+        nextDue: prevDue,
+      }).catch(err => {
+        console.warn('Firestore unmark recurring error:', err);
       });
     }
 

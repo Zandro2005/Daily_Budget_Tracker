@@ -129,26 +129,46 @@ export function renderDashboard() {
     const recurringCard = document.createElement('div');
     recurringCard.className = 'cloud-card';
     recurringCard.style.marginBottom = '1.75rem';
+
+    // Sort: unpaid bills first, then sorted by nextDue
+    const sortedRecurring = [...recurring].sort((a, b) => {
+      const aPaid = store.isRecurringPaidThisMonth(a);
+      const bPaid = store.isRecurringPaidThisMonth(b);
+      if (aPaid !== bPaid) return aPaid ? 1 : -1;
+      return new Date(a.nextDue || 0) - new Date(b.nextDue || 0);
+    });
+
     recurringCard.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">🔁 Upcoming Bills</h3>
         <button class="pill squish-btn" id="view-all-bills-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">Manage →</button>
       </div>
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-        ${recurring.slice(0, 3).map(r => `
-          <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card-cloud); padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-            <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">${r.name}</div>
-              <div style="font-size: 0.78rem; color: var(--text-muted);">Due: ${formatDate(r.nextDue)}</div>
+        ${sortedRecurring.slice(0, 3).map(r => {
+          const isPaid = store.isRecurringPaidThisMonth(r);
+          return `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card-cloud); padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div>
+                <div style="font-weight: 700; font-size: 0.95rem;">${r.name}</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">
+                  ${isPaid ? 'Next Due' : 'Due'}: ${formatDate(r.nextDue)}
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-weight: 800; font-family: var(--font-display);">${formatCurrency(r.amount, curr)}</span>
+                ${isPaid ? `
+                  <span class="bill-pill bill-pill-paid">
+                    ✓ Paid
+                  </span>
+                ` : `
+                  <button class="bill-pill bill-pill-btn squish-btn bill-pay-quick-btn" data-id="${r.id}">
+                    Pay
+                  </button>
+                `}
+              </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <span style="font-weight: 800; font-family: var(--font-display);">${formatCurrency(r.amount, curr)}</span>
-              <button class="btn btn-primary btn-sm squish-btn bill-pay-quick-btn" data-id="${r.id}">
-                Paid ✓
-              </button>
-            </div>
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
     `;
 
@@ -157,7 +177,8 @@ export function renderDashboard() {
     };
 
     recurringCard.querySelectorAll('.bill-pay-quick-btn').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
         playCoin();
         const id = btn.dataset.id;
         store.markRecurringPaid(id);

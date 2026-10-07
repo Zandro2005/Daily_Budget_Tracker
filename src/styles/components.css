@@ -479,6 +479,87 @@
   color: #E2E8F0;
 }
 
+/* --- SLEEK PROFESSIONAL BILL STATUS & ACTION PILLS (NO BLUE HIGHLIGHT BOX) --- */
+.bill-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.32rem 0.8rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+
+/* Paid pill: calm, refined sage/mint badge */
+.bill-pill-paid {
+  background: rgba(56, 161, 105, 0.12);
+  color: #22543d;
+  border: 1px solid rgba(56, 161, 105, 0.28);
+  font-weight: 700;
+  cursor: default;
+}
+
+[data-theme="night"] .bill-pill-paid {
+  background: rgba(104, 211, 145, 0.16);
+  color: #9ae6b4;
+  border-color: rgba(104, 211, 145, 0.32);
+}
+
+/* Action pill button: clean, minimalist, subtle border, professional */
+.bill-pill-btn {
+  background: var(--bg-card-cloud);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.bill-pill-btn:hover {
+  background: var(--sky-100);
+  border-color: var(--sky-400);
+  color: var(--sky-600);
+  transform: translateY(-1px);
+}
+
+.bill-pill-btn:active {
+  transform: translateY(0);
+}
+
+.bill-pill-btn:focus,
+.bill-pill-btn:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Subtle undo link */
+.bill-pill-undo {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  text-decoration: none;
+  transition: color 0.15s ease;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bill-pill-undo:hover {
+  color: var(--danger);
+  text-decoration: underline;
+}
+
 /* --- FORM ELEMENTS --- */
 .form-group {
   margin-bottom: 1.15rem;

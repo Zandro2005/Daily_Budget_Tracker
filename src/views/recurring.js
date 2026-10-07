@@ -76,7 +76,15 @@ export function renderRecurring() {
         </div>
       `;
     } else {
-      recurringList.forEach(item => {
+      // Sort: unpaid subscriptions first
+      const sortedList = [...recurringList].sort((a, b) => {
+        const aPaid = store.isRecurringPaidThisMonth(a);
+        const bPaid = store.isRecurringPaidThisMonth(b);
+        if (aPaid !== bPaid) return aPaid ? 1 : -1;
+        return new Date(a.nextDue || 0) - new Date(b.nextDue || 0);
+      });
+
+      sortedList.forEach(item => {
         const itemCard = document.createElement('div');
         itemCard.className = 'cloud-card';
         itemCard.style.padding = '1rem 1.25rem';
@@ -87,6 +95,7 @@ export function renderRecurring() {
         itemCard.style.gap = '0.75rem';
 
         const category = store.getCategories().find(c => c.id === item.categoryId);
+        const isPaid = store.isRecurringPaidThisMonth(item);
 
         itemCard.innerHTML = `
           <div style="display: flex; align-items: center; gap: 0.85rem;">
@@ -96,30 +105,49 @@ export function renderRecurring() {
             <div>
               <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);">${item.name}</div>
               <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">
-                Next Due: <strong>${formatDate(item.nextDue)}</strong> &bull; ${item.frequency}
+                ${isPaid ? 'Next Due' : 'Due'}: <strong>${formatDate(item.nextDue)}</strong> &bull; ${item.frequency}
               </div>
             </div>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.85rem;">
             <div style="text-align: right;">
               <span style="font-family: var(--font-display); font-weight: 800; font-size: 1.2rem;">${formatCurrency(item.amount, curr)}</span>
             </div>
-            <button class="btn btn-primary btn-sm squish-btn mark-paid-btn" data-id="${item.id}">
-              Pay & Log ✓
-            </button>
+            ${isPaid ? `
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <span class="bill-pill bill-pill-paid">✓ Paid this month</span>
+                <button class="bill-pill-undo undo-paid-btn" data-id="${item.id}" title="Reset to unpaid">Undo</button>
+              </div>
+            ` : `
+              <button class="bill-pill bill-pill-btn squish-btn mark-paid-btn" data-id="${item.id}">
+                Pay & Log ✓
+              </button>
+            `}
             <button class="icon-btn delete-bill-btn" data-id="${item.id}" title="Delete" style="width: 32px; height: 32px; font-size: 0.85rem; color: var(--danger);">
               🗑️
             </button>
           </div>
         `;
 
-        itemCard.querySelector('.mark-paid-btn').onclick = () => {
-          playCoin();
-          store.markRecurringPaid(item.id);
-          showToast({ text: `Paid & logged ${item.name}! ☁️`, icon: '✨' });
-          renderContent();
-        };
+        const markBtn = itemCard.querySelector('.mark-paid-btn');
+        if (markBtn) {
+          markBtn.onclick = () => {
+            playCoin();
+            store.markRecurringPaid(item.id);
+            showToast({ text: `Paid & logged ${item.name}! ☁️`, icon: '✨' });
+            renderContent();
+          };
+        }
+
+        const undoBtn = itemCard.querySelector('.undo-paid-btn');
+        if (undoBtn) {
+          undoBtn.onclick = () => {
+            store.unmarkRecurringPaid(item.id);
+            showToast({ text: `Reset ${item.name} to unpaid ⚡` });
+            renderContent();
+          };
+        }
 
         itemCard.querySelector('.delete-bill-btn').onclick = () => {
           if (confirm(`Remove subscription "${item.name}"?`)) {
