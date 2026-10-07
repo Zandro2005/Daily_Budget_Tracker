@@ -29,17 +29,10 @@ export function renderPlanner() {
     const header = document.createElement('div');
     header.style.marginBottom = '1.25rem';
     header.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-          <h2 style="font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-            <span>🗓️</span> Budget Planner
-          </h2>
-          <p style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">
-            Plan your month, protect your savings, stay calm
-          </p>
-        </div>
-        <button class="pill squish-btn" id="plan-503020-btn" style="cursor: pointer; border: none; padding: 0.4rem 0.8rem; background: var(--sky-100); color: var(--primary);">
-          ✨ 50/30/20 Rule
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 700;">🗓️ Budget Planner</h2>
+        <button class="pill squish-btn" id="plan-503020-btn" style="cursor: pointer; border: none; padding: 0.4rem 0.75rem; font-size: 0.78rem; background: var(--sky-100); color: var(--primary);">
+          ✨ 50/30/20
         </button>
       </div>
     `;
@@ -133,15 +126,9 @@ export function renderPlanner() {
     envelopesCard.className = 'cloud-card';
     envelopesCard.style.padding = '1.25rem';
     envelopesCard.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.15rem;">
-        <div>
-          <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
-            <span>🗂️</span> Category Envelopes
-          </h3>
-          <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">
-            Tap any envelope to adjust its monthly limit
-          </span>
-        </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">🗂️ Envelopes</h3>
+        <span style="font-size: 0.72rem; color: var(--text-muted);">Tap to adjust</span>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 0.85rem;" id="envelopes-list"></div>

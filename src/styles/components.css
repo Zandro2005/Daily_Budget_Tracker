@@ -126,6 +126,9 @@
   border: none;
   background: transparent;
   min-height: 46px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 .nav-link .nav-icon {
@@ -171,6 +174,9 @@
   margin: 0 0.35rem;
   flex-shrink: 0;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 [data-theme="night"] .fab-add {
@@ -401,6 +407,8 @@
   gap: 0.5rem;
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-primary {
@@ -503,7 +511,7 @@
   box-shadow: 0 0 0 4px rgba(126, 193, 241, 0.25);
 }
 
-/* --- MODAL SYSTEM (Keyboard & Mobile Friendly) --- */
+/* --- MODAL SYSTEM (Centered & Clean) --- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -514,7 +522,7 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: 1rem 0.75rem;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
@@ -528,17 +536,18 @@
 .modal-dialog {
   background: var(--bg-card);
   border: 1.5px solid var(--border-color);
-  border-radius: var(--radius-xl);
+  border-radius: 24px;
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 480px;
+  max-width: 430px;
   max-height: 85vh;
   max-height: 85dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 1.5rem;
-  transform: translateY(20px) scale(0.97);
+  padding: 1.35rem 1.15rem;
+  transform: translateY(15px) scale(0.97);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: auto;
 }
 
 .modal-backdrop.open .modal-dialog {
@@ -548,16 +557,19 @@
 @media (max-width: 600px) {
   .modal-backdrop {
     align-items: flex-end;
+    justify-content: center;
     padding: 0;
   }
   .modal-dialog {
-    max-height: 88dvh;
-    border-radius: 26px 26px 0 0;
-    padding: 1.25rem 1.15rem calc(2.5rem + env(safe-area-inset-bottom, 16px)) 1.15rem;
+    max-height: 92dvh;
+    border-radius: 24px 24px 0 0;
+    padding: 1.15rem 1rem max(1.25rem, env(safe-area-inset-bottom)) 1rem;
     transform: translateY(100%);
+    width: 100%;
+    max-width: 100%;
   }
   .modal-backdrop.open .modal-dialog {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 

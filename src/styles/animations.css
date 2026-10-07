@@ -128,6 +128,9 @@
 /* Delightful button squish feedback */
 .squish-btn {
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
 .squish-btn:hover {
@@ -136,4 +139,9 @@
 
 .squish-btn:active {
   transform: translateY(2px) scale(0.96) !important;
+}
+
+/* Fade-in animation for views */
+.anim-fade-in {
+  animation: fadeIn 0.22s ease forwards;
 }

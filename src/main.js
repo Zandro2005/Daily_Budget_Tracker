@@ -57,10 +57,7 @@ function initApp() {
       <header class="app-header">
         <a href="#dashboard" class="brand" id="brand-link">
           <img src="/assets/mascot/happy.jpg" class="brand-avatar" alt="Cloudy Mascot">
-          <div>
-            <div class="brand-title">Cloudy Budget <span style="font-size: 1.1rem;">☁️</span></div>
-            <div class="brand-tagline">Joyful & Mindful Finances</div>
-          </div>
+          <div class="brand-title">Cloudy Budget <span style="font-size: 1rem;">☁️</span></div>
         </a>
 
         <div class="header-controls">

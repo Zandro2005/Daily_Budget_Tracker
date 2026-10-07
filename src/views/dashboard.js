@@ -24,35 +24,27 @@ export function renderDashboard() {
   const heroInfo = document.createElement('div');
   heroInfo.innerHTML = `
     <div class="balance-label">
-      <span>☁️</span> ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Budget
+      ☁️ ${new Date().toLocaleDateString('en-US', { month: 'long' })} Remaining
     </div>
-    <div class="balance-amount">${formatCurrency(summary.remainingBudget, curr)}</div>
-    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.25rem;">
-      <span>Remaining of ${formatCurrency(summary.budgetLimit, curr)} cap</span>
-      <span style="color: var(--primary); background: var(--sky-100); padding: 0.15rem 0.5rem; border-radius: var(--radius-full);">Safe: ${formatCurrency(store.getDailyAllowance().dailySafeSpend, curr)}/day</span>
-    </div>
-
-    <!-- Overall Budget Bar -->
-    <div style="margin-bottom: 1.25rem;">
-      <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; margin-bottom: 0.35rem;">
-        <span>Spent: ${Math.round(summary.usagePercent)}%</span>
-        <span>${formatCurrency(summary.totalExpense, curr)}</span>
-      </div>
-      <div class="cloud-progress">
-        <div class="cloud-progress-fill ${
-          summary.usagePercent > 100 ? 'status-danger' : summary.usagePercent >= 75 ? 'status-warn' : 'status-safe'
-        }" style="width: ${Math.min(100, Math.round(summary.usagePercent))}%;"></div>
-      </div>
+    <div class="balance-amount" style="margin: 0.1rem 0 0.45rem 0;">${formatCurrency(summary.remainingBudget, curr)}</div>
+    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.55rem;">
+      <span>${formatCurrency(store.getDailyAllowance().dailySafeSpend, curr)}<span style="font-weight:500">/day safe</span></span>
+      <span>${Math.round(summary.usagePercent)}% used</span>
     </div>
 
-    <!-- Income & Expense mini pills -->
+    <div class="cloud-progress" style="margin-bottom: 0.85rem;">
+      <div class="cloud-progress-fill ${
+        summary.usagePercent > 100 ? 'status-danger' : summary.usagePercent >= 75 ? 'status-warn' : 'status-safe'
+      }" style="width: ${Math.min(100, Math.round(summary.usagePercent))}%;"></div>
+    </div>
+
     <div class="balance-stats">
       <div class="stat-pill">
-        <span class="stat-pill-label"><span>🌱</span> Income</span>
+        <span class="stat-pill-label">🌱 Income</span>
         <span class="stat-pill-val val-income">+${formatCurrency(summary.totalIncome, curr)}</span>
       </div>
       <div class="stat-pill">
-        <span class="stat-pill-label"><span>💸</span> Spent</span>
+        <span class="stat-pill-label">💸 Spent</span>
         <span class="stat-pill-val val-expense">-${formatCurrency(summary.totalExpense, curr)}</span>
       </div>
     </div>
@@ -100,26 +92,22 @@ export function renderDashboard() {
   const catSpendings = store.getCategorySpending().slice(0, 4);
 
   categoryCard.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-      <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-        <span>🗂️</span> Category Spending
-      </h3>
-      <button class="pill squish-btn" id="view-all-cats-btn" style="cursor: pointer; border: none;">View All &rarr;</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">🗂️ Spending</h3>
+      <button class="pill squish-btn" id="view-all-cats-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">Planner →</button>
     </div>
-    <div class="cat-list-box" style="display: flex; flex-direction: column; gap: 1rem;">
+    <div class="cat-list-box" style="display: flex; flex-direction: column; gap: 0.85rem;">
       ${
         catSpendings.length === 0
-          ? '<p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 1rem;">No category expenses yet this month! 🌸</p>'
+          ? '<p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1rem;">No expenses yet 🌸</p>'
           : catSpendings
               .map(c => `
           <div>
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; font-weight: 700; margin-bottom: 0.35rem;">
-              <span style="display: flex; align-items: center; gap: 0.35rem;">
-                <span>${c.emoji}</span> ${c.name}
-              </span>
-              <span>${formatCurrency(c.spent, curr)} <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">/ ${c.monthly_limit > 0 ? formatCurrency(c.monthly_limit, curr) : 'No cap'}</span></span>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; font-weight: 700; margin-bottom: 0.3rem;">
+              <span>${c.emoji} ${c.name.split(' ')[0]}</span>
+              <span>${formatCurrency(c.spent, curr)}<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;"> / ${c.monthly_limit > 0 ? formatCurrency(c.monthly_limit, curr) : '∞'}</span></span>
             </div>
-            <div class="cloud-progress" style="height: 10px;">
+            <div class="cloud-progress" style="height: 8px;">
               <div class="cloud-progress-fill ${
                 c.percent > 100 ? 'status-danger' : c.percent >= 80 ? 'status-warn' : 'status-safe'
               }" style="width: ${Math.min(100, Math.round(c.percent))}%;"></div>
@@ -143,10 +131,8 @@ export function renderDashboard() {
     recurringCard.style.marginBottom = '1.75rem';
     recurringCard.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-          <span>🔁</span> Recurring Bills & Subs
-        </h3>
-        <button class="pill squish-btn" id="view-all-bills-btn" style="cursor: pointer; border: none;">Manage &rarr;</button>
+        <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">🔁 Upcoming Bills</h3>
+        <button class="pill squish-btn" id="view-all-bills-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">Manage →</button>
       </div>
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
         ${recurring.slice(0, 3).map(r => `
@@ -188,16 +174,14 @@ export function renderDashboard() {
   const recentTx = store.getTransactions().slice(0, 5);
 
   txCard.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-      <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-        <span>📝</span> Recent Cloud Activity
-      </h3>
-      <button class="pill squish-btn" id="view-all-tx-btn" style="cursor: pointer; border: none;">View All &rarr;</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;">📝 Recent</h3>
+      <button class="pill squish-btn" id="view-all-tx-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">All →</button>
     </div>
     <div style="display: flex; flex-direction: column; gap: 0.65rem;">
       ${
         recentTx.length === 0
-          ? '<p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 1.5rem;">No transactions yet! Tap "+" to log your first treat. ☁️</p>'
+          ? '<p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1.5rem;">No transactions yet! Tap + to start. ☁️</p>'
           : recentTx
               .map(t => `
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.9rem; border-radius: var(--radius-md); background: var(--bg-card-cloud); border: 1px solid var(--border-color); transition: all 0.2s ease;">

@@ -90,23 +90,23 @@ function createModalDOM() {
   modalInstance = backdrop;
 
   backdrop.innerHTML = `
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3 class="modal-title"><span>☁️</span> Quick Add Record</h3>
-        <button class="modal-close" id="qa-close-btn">&times;</button>
+    <div class="modal-dialog" style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 16px));">
+      <div class="modal-header" style="justify-content: center; position: relative; margin-bottom: 0.75rem;">
+        <h3 class="modal-title" style="font-size: 1.1rem;">Quick Add</h3>
+        <button class="modal-close" id="qa-close-btn" style="position: absolute; right: 0;">&times;</button>
       </div>
 
       <!-- Type Switcher -->
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; background: var(--bg-input); padding: 4px; border-radius: var(--radius-full);">
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); padding: 4px; border-radius: var(--radius-full);">
         <label style="flex: 1; text-align: center; cursor: pointer;">
           <input type="radio" name="qa-type" value="expense" checked style="display: none;">
-          <div class="type-pill-btn active-expense" id="pill-expense" style="padding: 0.5rem; border-radius: var(--radius-full); font-weight: 700; font-size: 0.88rem; transition: all 0.2s;">
+          <div class="type-pill-btn active-expense" id="pill-expense" style="padding: 0.4rem; border-radius: var(--radius-full); font-weight: 700; font-size: 0.85rem; transition: all 0.2s; user-select: none;">
             💸 Expense
           </div>
         </label>
         <label style="flex: 1; text-align: center; cursor: pointer;">
           <input type="radio" name="qa-type" value="income" style="display: none;">
-          <div class="type-pill-btn" id="pill-income" style="padding: 0.5rem; border-radius: var(--radius-full); font-weight: 700; font-size: 0.88rem; transition: all 0.2s;">
+          <div class="type-pill-btn" id="pill-income" style="padding: 0.4rem; border-radius: var(--radius-full); font-weight: 700; font-size: 0.85rem; transition: all 0.2s; user-select: none;">
             💰 Income
           </div>
         </label>
@@ -114,50 +114,41 @@ function createModalDOM() {
 
       <form id="qa-form">
         <!-- Amount Input -->
-        <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label class="form-label" style="margin-bottom: 0.25rem;">Amount</label>
-          <div style="position: relative;">
-            <input 
-              type="number" 
-              id="qa-amount" 
-              class="form-input" 
-              placeholder="0.00" 
-              step="any" 
-              required
-              style="font-size: 1.45rem; font-weight: 800; font-family: var(--font-display); padding: 0.45rem 0.85rem; height: 46px;"
-            >
-          </div>
+        <div class="form-group" style="margin-bottom: 0.55rem; text-align: center;">
+          <input 
+            type="number" 
+            id="qa-amount" 
+            class="form-input" 
+            placeholder="0.00" 
+            step="any" 
+            inputmode="decimal"
+            required
+            style="font-size: 1.55rem; font-weight: 800; font-family: var(--font-display); text-align: center; padding: 0.4rem; height: 46px;"
+          >
         </div>
 
         <!-- Quick Amount Presets -->
-        <div class="quick-amount-presets" style="margin-bottom: 0.75rem; gap: 0.35rem;">
-          <button type="button" class="preset-chip" data-add="50" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+50</button>
-          <button type="button" class="preset-chip" data-add="100" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+100</button>
-          <button type="button" class="preset-chip" data-add="200" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+200</button>
-          <button type="button" class="preset-chip" data-add="500" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+500</button>
-          <button type="button" class="preset-chip" data-add="1000" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+1k</button>
+        <div class="quick-amount-presets" style="display: flex; justify-content: center; margin-bottom: 0.6rem; gap: 0.3rem; flex-wrap: nowrap;">
+          <button type="button" class="preset-chip" data-add="50" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+50</button>
+          <button type="button" class="preset-chip" data-add="100" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+100</button>
+          <button type="button" class="preset-chip" data-add="200" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+200</button>
+          <button type="button" class="preset-chip" data-add="500" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+500</button>
+          <button type="button" class="preset-chip" data-add="1000" style="padding: 0.22rem 0.55rem; font-size: 0.76rem;">+1k</button>
         </div>
 
         <!-- Category Grid -->
-        <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label class="form-label" style="margin-bottom: 0.25rem;">Category</label>
+        <div class="form-group" style="margin-bottom: 0.55rem;">
           <div id="qa-category-grid" class="category-grid"></div>
         </div>
 
-        <!-- Note (Optional) -->
-        <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label class="form-label" style="margin-bottom: 0.25rem;">Note (optional)</label>
-          <input type="text" id="qa-note" class="form-input" style="padding: 0.5rem 0.75rem; font-size: 0.88rem;" placeholder="e.g. Matcha latte, Grab ride...">
+        <!-- Note & Date -->
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 0.45rem; margin-bottom: 0.7rem;">
+          <input type="text" id="qa-note" class="form-input" style="padding: 0.42rem 0.6rem; font-size: 0.84rem;" placeholder="Note (optional)">
+          <input type="date" id="qa-date" class="form-input" style="padding: 0.42rem 0.45rem; font-size: 0.8rem;" value="${getTodayDateString()}">
         </div>
 
-        <!-- Date -->
-        <div class="form-group" style="margin-bottom: 0.75rem;">
-          <label class="form-label" style="margin-bottom: 0.25rem;">Date</label>
-          <input type="date" id="qa-date" class="form-input" style="padding: 0.45rem 0.75rem; font-size: 0.88rem;" value="${getTodayDateString()}">
-        </div>
-
-        <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.75rem; font-size: 0.95rem; margin-top: 0.4rem;">
-          <span>✨</span> Save to Clouds
+        <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.7rem; font-size: 0.95rem; touch-action: manipulation;">
+          Save ✨
         </button>
       </form>
     </div>
@@ -167,8 +158,8 @@ function createModalDOM() {
   backdrop.querySelectorAll('input').forEach(input => {
     input.addEventListener('focus', () => {
       setTimeout(() => {
-        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 250);
+        input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 350);
     });
   });
 
