@@ -21,8 +21,9 @@ export function openQuickAddModal(initialType = 'expense') {
 
     resetModalState(initialType);
     modalInstance.classList.add('open');
+    const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     const amountInput = modalInstance.querySelector('#qa-amount');
-    if (amountInput) {
+    if (!isTouch && amountInput) {
       setTimeout(() => amountInput.focus(), 150);
     }
   } catch (err) {
@@ -113,8 +114,8 @@ function createModalDOM() {
 
       <form id="qa-form">
         <!-- Amount Input -->
-        <div class="form-group">
-          <label class="form-label">Amount</label>
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+          <label class="form-label" style="margin-bottom: 0.25rem;">Amount</label>
           <div style="position: relative;">
             <input 
               type="number" 
@@ -123,46 +124,53 @@ function createModalDOM() {
               placeholder="0.00" 
               step="any" 
               required
-              style="font-size: 1.75rem; font-weight: 800; font-family: var(--font-display); padding-left: 1.25rem; height: 56px;"
+              style="font-size: 1.45rem; font-weight: 800; font-family: var(--font-display); padding: 0.45rem 0.85rem; height: 46px;"
             >
           </div>
         </div>
 
         <!-- Quick Amount Presets -->
-        <div class="quick-amount-presets">
-          <button type="button" class="preset-chip" data-add="50">+50</button>
-          <button type="button" class="preset-chip" data-add="100">+100</button>
-          <button type="button" class="preset-chip" data-add="200">+200</button>
-          <button type="button" class="preset-chip" data-add="500">+500</button>
-          <button type="button" class="preset-chip" data-add="1000">+1,000</button>
+        <div class="quick-amount-presets" style="margin-bottom: 0.75rem; gap: 0.35rem;">
+          <button type="button" class="preset-chip" data-add="50" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+50</button>
+          <button type="button" class="preset-chip" data-add="100" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+100</button>
+          <button type="button" class="preset-chip" data-add="200" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+200</button>
+          <button type="button" class="preset-chip" data-add="500" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+500</button>
+          <button type="button" class="preset-chip" data-add="1000" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">+1k</button>
         </div>
 
         <!-- Category Grid -->
-        <div class="form-group">
-          <label class="form-label">Category</label>
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+          <label class="form-label" style="margin-bottom: 0.25rem;">Category</label>
           <div id="qa-category-grid" class="category-grid"></div>
         </div>
 
         <!-- Note (Optional) -->
-        <div class="form-group">
-          <label class="form-label">Note (optional)</label>
-          <input type="text" id="qa-note" class="form-input" placeholder="e.g. Iced Matcha, Grab ride, groceries...">
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+          <label class="form-label" style="margin-bottom: 0.25rem;">Note (optional)</label>
+          <input type="text" id="qa-note" class="form-input" style="padding: 0.5rem 0.75rem; font-size: 0.88rem;" placeholder="e.g. Matcha latte, Grab ride...">
         </div>
 
         <!-- Date -->
-        <div class="form-group" style="display: flex; gap: 0.75rem;">
-          <div style="flex: 1;">
-            <label class="form-label">Date</label>
-            <input type="date" id="qa-date" class="form-input" value="${getTodayDateString()}">
-          </div>
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+          <label class="form-label" style="margin-bottom: 0.25rem;">Date</label>
+          <input type="date" id="qa-date" class="form-input" style="padding: 0.45rem 0.75rem; font-size: 0.88rem;" value="${getTodayDateString()}">
         </div>
 
-        <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.9rem; font-size: 1.05rem; margin-top: 0.5rem;">
+        <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.75rem; font-size: 0.95rem; margin-top: 0.4rem;">
           <span>✨</span> Save to Clouds
         </button>
       </form>
     </div>
   `;
+
+  // Auto-scroll input into view when virtual keyboard pops up
+  backdrop.querySelectorAll('input').forEach(input => {
+    input.addEventListener('focus', () => {
+      setTimeout(() => {
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 250);
+    });
+  });
 
   // Close handlers
   backdrop.addEventListener('click', (e) => {
