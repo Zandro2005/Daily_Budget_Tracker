@@ -237,8 +237,11 @@ export function renderSettings() {
           <span>📤</span> Import JSON
           <input type="file" id="import-json-input" accept=".json" style="display: none;">
         </label>
-        <button class="btn btn-danger squish-btn" id="reset-demo-btn" style="margin-left: auto;">
-          <span>🔄</span> Reset Demo Data
+        <button class="btn btn-secondary squish-btn" id="reset-demo-btn">
+          <span>🔄</span> Load Demo Data
+        </button>
+        <button class="btn btn-danger squish-btn" id="clear-all-btn" style="margin-left: auto;">
+          <span>🗑️</span> Reset / Clear All Data
         </button>
       </div>
     `;
@@ -274,10 +277,19 @@ export function renderSettings() {
     };
 
     backupCard.querySelector('#reset-demo-btn').onclick = () => {
-      if (confirm('Reset to starter demo data? This will overwrite existing records.')) {
+      if (confirm('Load starter demo transactions and goals?')) {
         store.resetToDemoData();
         playCoin();
-        showToast({ text: 'Reset to fresh demo data! ☁️' });
+        showToast({ text: 'Loaded demo data! ☁️' });
+        renderContent();
+      }
+    };
+
+    backupCard.querySelector('#clear-all-btn').onclick = async () => {
+      if (confirm('Reset everything? This will delete all transactions, recurring bills, and savings goals from both this device and Firebase cloud.')) {
+        await store.clearAllData();
+        playCoin();
+        showToast({ text: 'All data cleared! Fresh clean slate ☁️' });
         renderContent();
       }
     };

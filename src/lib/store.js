@@ -156,11 +156,11 @@ class BudgetStore {
     this.unsubscribers = [];
     this.isCloudSyncActive = false;
 
-    // Load initial fast state from localStorage
+    // Load initial fast state from localStorage (clean empty state for transactions)
     this.categories = this.load(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
-    this.transactions = this.load(STORAGE_KEYS.TRANSACTIONS, getSampleTransactions());
-    this.recurring = this.load(STORAGE_KEYS.RECURRING, DEFAULT_RECURRING);
-    this.goals = this.load(STORAGE_KEYS.GOALS, DEFAULT_GOALS);
+    this.transactions = this.load(STORAGE_KEYS.TRANSACTIONS, []);
+    this.recurring = this.load(STORAGE_KEYS.RECURRING, []);
+    this.goals = this.load(STORAGE_KEYS.GOALS, []);
     this.settings = this.load(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
 
     // Apply stored theme on init
@@ -288,7 +288,7 @@ class BudgetStore {
     }
   }
 
-  // Seed default collections if fresh database
+  // Seed default collections if fresh database (categories & settings only)
   async seedInitialData(db) {
     try {
       const seeded = localStorage.getItem(STORAGE_KEYS.FIREBASE_INITIALIZED);
@@ -298,20 +298,11 @@ class BudgetStore {
       this.categories.forEach(c => {
         batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c);
       });
-      this.transactions.forEach(t => {
-        batch.set(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t);
-      });
-      this.recurring.forEach(r => {
-        batch.set(doc(db, FS_COLLECTIONS.RECURRING, r.id), r);
-      });
-      this.goals.forEach(g => {
-        batch.set(doc(db, FS_COLLECTIONS.GOALS, g.id), g);
-      });
       batch.set(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), {
-        currency: this.settings.currency,
-        monthlyBudget: this.settings.monthlyBudget,
-        expectedIncome: this.settings.expectedIncome,
-        soundEnabled: this.settings.soundEnabled,
+        currency: this.settings.currency || '₱',
+        monthlyBudget: this.settings.monthlyBudget || 25000,
+        expectedIncome: this.settings.expectedIncome || 35000,
+        soundEnabled: this.settings.soundEnabled ?? true,
       });
 
       await batch.commit();
@@ -884,6 +875,48 @@ class BudgetStore {
       console.error('Import failed:', e);
       return false;
     }
+  }
+
+  async clearAllData() {
+    this.transactions = [];
+    this.recurring = [];
+    this.goals = [];
+    this.categories = DEFAULT_CATEGORIES;
+    this.settings = DEFAULT_SETTINGS;
+
+    this.save(STORAGE_KEYS.TRANSACTIONS, []);
+    this.save(STORAGE_KEYS.RECURRING, []);
+    this.save(STORAGE_KEYS.GOALS, []);
+    this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+    this.save(STORAGE_KEYS.SETTINGS, this.settings);
+
+    this.applyTheme(this.settings.theme);
+    this.notify();
+
+    const db = getDb();
+    if (db) {
+      try {
+        const collections = [FS_COLLECTIONS.TRANSACTIONS, FS_COLLECTIONS.RECURRING, FS_COLLECTIONS.GOALS];
+        for (const col of collections) {
+          const snap = await getDocs(collection(db, col));
+          for (const d of snap.docs) {
+            await deleteDoc(d.ref);
+          }
+        }
+        const batch = writeBatch(db);
+        this.categories.forEach(c => batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c));
+        batch.set(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), {
+          currency: this.settings.currency,
+          monthlyBudget: this.settings.monthlyBudget,
+          expectedIncome: this.settings.expectedIncome,
+          soundEnabled: this.settings.soundEnabled,
+        });
+        await batch.commit();
+      } catch (err) {
+        console.warn('Clear all cloud data error:', err);
+      }
+    }
+    return true;
   }
 
   resetToDemoData() {
