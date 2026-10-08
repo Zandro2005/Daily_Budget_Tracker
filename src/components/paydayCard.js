@@ -160,6 +160,11 @@ export function renderPaydayCard() {
     const inputVal = card.querySelector('#payday-amount-input').value;
     const amount = parseFloat(inputVal) || pending.salary || 0;
 
+    if (amount <= 0) {
+      showToast({ text: "Please enter a valid paycheck amount.", icon: "⚠️" });
+      return;
+    }
+
     let leftoverAction = 'save';
     let goalId = null;
 
