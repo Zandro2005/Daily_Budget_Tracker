@@ -258,7 +258,7 @@ export function renderPlanner() {
         </button>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 0.85rem;" id="envelopes-list"></div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;" id="envelopes-list"></div>
     `;
 
     const envelopesList = envelopesCard.querySelector('#envelopes-list');
@@ -283,22 +283,20 @@ export function renderPlanner() {
       itemEl.style.cssText = 'background: var(--bg-card-cloud); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s ease;';
 
       itemEl.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
-          <div style="display: flex; align-items: center; gap: 0.6rem;">
-            <div style="width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="width: 36px; height: 36px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
               ${getCategoryIconSvg(cat.id || cat.name)}
             </div>
-            <div>
-              <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main);">${cat.name}</div>
-              <div style="font-size: 0.74rem; color: var(--text-muted);">
-                Spent: <strong>${formatCurrency(cat.spent, curr)}</strong> of ${limit > 0 ? formatCurrency(limit, curr) : 'No cap'}
-              </div>
-            </div>
-          </div>
-          <div style="text-align: right;">
-            <span class="pill" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--danger)' : 'var(--text-main)'}; font-weight: 700;">
-              ${limit > 0 ? (isOver ? `+${formatCurrency(cat.spent - limit, curr)} over` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)} left`) : 'Set limit'}
+            <span class="pill" style="font-size: 0.68rem; padding: 0.2rem 0.45rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--danger)' : 'var(--text-main)'}; font-weight: 700;">
+              ${limit > 0 ? (isOver ? `+${formatCurrency(cat.spent - limit, curr)}` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)}`) : 'No Limit'}
             </span>
+          </div>
+          <div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); line-height: 1.1; margin-bottom: 0.2rem;">${cat.name}</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">
+              Spent: <strong style="color: var(--text-main);">${formatCurrency(cat.spent, curr)}</strong>
+            </div>
           </div>
         </div>
 
