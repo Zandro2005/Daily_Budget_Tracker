@@ -569,7 +569,7 @@ export function renderPlanner() {
             <label class="form-label">Allocated Budget (${curr})</label>
             <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${Math.round(currentLimit)}" step="1" placeholder="0">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-              ${isEdit && cat.id === 'cat-daily' ? 'Sets the base daily allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`}
+              ${isEdit && (cat.id === 'cat-daily' || cat.name.toLowerCase().includes('allowance')) ? 'Sets the base allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`}
             </small>
           </div>
           <div class="quick-amount-presets" style="margin-bottom: 1.25rem;">

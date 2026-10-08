@@ -35,9 +35,9 @@ export function renderCalendar() {
   const totalDays = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
   const daysLeft = Math.max(1, curCutoff.daysLeft || 1);
 
-  // Base daily allowance strictly derived from Daily Allowance envelope
+  // Base daily allowance strictly derived from Cutoff Allowance envelope
   const cutoffCategories = store.getCutoffCategorySpending(curCutoff);
-  const dailyCat = cutoffCategories.find(c => c.id === 'cat-daily' || c.name.toLowerCase().includes('daily'));
+  const dailyCat = cutoffCategories.find(c => c.id === 'cat-daily' || c.name.toLowerCase().includes('allowance') || c.name.toLowerCase().includes('daily'));
 
   const dailyPeriodLimit = dailyCat
     ? (dailyCat.period_limit || (isSemi ? Math.round((dailyCat.monthly_limit || 0) / 2) : (dailyCat.monthly_limit || 0)))
@@ -48,14 +48,14 @@ export function renderCalendar() {
   let baseDaily = 0;
   let suggestedDaily = 0;
   if (dailyPeriodLimit > 0) {
-    baseDaily = dailyPeriodLimit / totalDays;
-    suggestedDaily = Math.round(dailyEnvelopeRemaining / daysLeft);
+    baseDaily = Math.round(dailyPeriodLimit / totalDays);
+    suggestedDaily = baseDaily;
   } else {
     baseDaily = 0;
     suggestedDaily = 0;
   }
 
-  // Filter expenses belonging to Daily Allowance or general
+  // Filter expenses belonging to Cutoff Allowance or general
   const txs = store.getTransactions().filter(t =>
     t.type === 'expense' &&
     t.date >= curCutoff.start &&
@@ -69,7 +69,32 @@ export function renderCalendar() {
     dailySpent[t.date] += parseFloat(t.amount) || 0;
   });
 
-  // Calculate cumulative rollover for all cutoff days
+  // Calculate cumulative rollover:
+  // Everyday budget is baseDaily (e.g. 2000 / 15 = 133).
+  // Rollover starts from active tracking date so past days don't accumulate phantom balance.
+  let trackingStartDate = todayStr;
+  const cutoffRecord = store.getCutoffRecord(curCutoff.id) || {};
+  if (cutoffRecord.dailyAllowanceStartDate) {
+    trackingStartDate = cutoffRecord.dailyAllowanceStartDate;
+  } else if (dailyPeriodLimit > 0) {
+    trackingStartDate = todayStr;
+    try {
+      store.saveCutoffRecord({
+        ...cutoffRecord,
+        id: curCutoff.id,
+        dailyAllowanceStartDate: todayStr,
+      });
+    } catch (_) {}
+  }
+
+  // If there are recorded transactions prior to trackingStartDate, adjust to the earliest transaction date
+  if (txs.length > 0) {
+    const earliestTx = txs.reduce((min, t) => (t.date < min ? t.date : min), txs[0].date);
+    if (earliestTx < trackingStartDate) {
+      trackingStartDate = earliestTx;
+    }
+  }
+
   let accumulatedLeftover = 0;
   const allDaysData = [];
 
@@ -81,9 +106,16 @@ export function renderCalendar() {
     const isToday = dStr === todayStr;
     const isFuture = d > todayDate;
 
+    const isBeforeTracking = dStr < trackingStartDate;
     const spent = dailySpent[dStr] || 0;
-    const startAllowance = baseDaily + accumulatedLeftover;
-    const leftover = startAllowance - spent;
+
+    let startAllowance = 0;
+    let leftover = 0;
+
+    if (!isBeforeTracking && dailyPeriodLimit > 0) {
+      startAllowance = baseDaily + accumulatedLeftover;
+      leftover = startAllowance - spent;
+    }
 
     allDaysData.push({
       date: d,
@@ -98,40 +130,23 @@ export function renderCalendar() {
       leftover,
     });
 
-    if (!isFuture) {
+    if (!isBeforeTracking && !isFuture && dailyPeriodLimit > 0) {
       accumulatedLeftover = leftover;
     }
   }
 
-  // Yesterday and Today data points
-  let yesterdayData = allDaysData.find(d => d.dStr === yesterdayStr);
-  if (!yesterdayData) {
-    const ySpent = store.getTransactions()
-      .filter(t => t.type === 'expense' && t.date === yesterdayStr && (t.categoryId === 'cat-daily' || !t.categoryId))
-      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-    yesterdayData = {
-      dStr: yesterdayStr,
-      dayNum: yesterdayDate.getDate(),
-      spent: ySpent,
-      startAllowance: baseDaily,
-      leftover: baseDaily - ySpent
+  let todayData = allDaysData.find(d => d.dStr === todayStr);
+  if (!todayData) {
+    const tSpent = dailySpent[todayStr] || 0;
+    const tStart = dailyPeriodLimit > 0 ? (baseDaily + accumulatedLeftover) : 0;
+    todayData = {
+      dStr: todayStr,
+      dayNum: todayDate.getDate(),
+      spent: tSpent,
+      startAllowance: tStart,
+      leftover: tStart - tSpent,
     };
   }
-
-  // Today's allowance: starts with full available Daily Envelope budget without premature deductions
-  const priorDailySpent = txs
-    .filter(t => t.date < todayStr)
-    .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-  const tSpent = dailySpent[todayStr] || 0;
-  const tStart = dailyPeriodLimit > 0 ? Math.max(0, dailyPeriodLimit - priorDailySpent) : 0;
-
-  const todayData = {
-    dStr: todayStr,
-    dayNum: todayDate.getDate(),
-    spent: tSpent,
-    startAllowance: tStart,
-    leftover: tStart - tSpent
-  };
 
   // --- HEADER (CLEAN & DIRECT) ---
   const header = document.createElement('div');
@@ -283,7 +298,7 @@ export function renderCalendar() {
     <!-- Envelope Allocation Context Box -->
     <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(240, 248, 255, 0.75); padding: 0.6rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--sky-200); font-size: 0.76rem;">
       <div>
-        <span style="color: var(--text-muted); font-weight: 600;">Daily Envelope: </span>
+        <span style="color: var(--text-muted); font-weight: 600;">Cutoff Allowance: </span>
         <strong style="color: var(--text-main); font-weight: 800;">${hasDailyBudget ? formatCurrency(dailyPeriodLimit, curr) : 'No Budget'}</strong>
       </div>
       <div style="text-align: right;">
@@ -294,7 +309,7 @@ export function renderCalendar() {
     ${!hasDailyBudget ? `
       <div style="margin-top: 0.55rem; text-align: center;">
         <a href="#planner" style="font-size: 0.74rem; color: var(--primary); font-weight: 700; text-decoration: none;">
-          + Allocate Daily Allowance in Planner &rarr;
+          + Allocate Cutoff Allowance in Planner &rarr;
         </a>
       </div>
     ` : ''}

@@ -139,7 +139,7 @@ export function renderCategories() {
           </div>
           
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1.5rem;">
-            Tip: Setting an allocation for the <strong>"Daily Allowance"</strong> envelope sets your Daily Tracker base value!
+            Tip: Setting an allocation for the <strong>"Cutoff Allowance"</strong> envelope sets your Daily Tracker base value!
           </div>
 
           <div style="display: flex; gap: 0.5rem;">

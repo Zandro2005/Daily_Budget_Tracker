@@ -51,7 +51,7 @@ localStorage.removeItem(STORAGE_KEYS.CATEGORIES); // Force reset to new defaults
 const DEFAULT_CATEGORIES = [
   { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
   { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
-  { id: 'cat-daily', name: 'Daily Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
+  { id: 'cat-daily', name: 'Cutoff Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
   { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
   { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
 ];
@@ -112,17 +112,20 @@ class BudgetStore {
     const standard = [
       { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
       { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
-      { id: 'cat-daily', name: 'Daily Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
+      { id: 'cat-daily', name: 'Cutoff Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
       { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
       { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
     ];
 
     standard.forEach(std => {
-      const existing = filtered.find(c => c.id === std.id || c.name.toLowerCase() === std.name.toLowerCase());
+      const existing = filtered.find(c => c.id === std.id || c.name.toLowerCase() === std.name.toLowerCase() || (std.id === 'cat-daily' && (c.name.toLowerCase().includes('daily') || c.name.toLowerCase().includes('allowance'))));
       if (!existing) {
         filtered.push(std);
       } else {
         existing.emoji = '';
+        if (existing.id === 'cat-daily') {
+          existing.name = 'Cutoff Allowance';
+        }
       }
     });
 
@@ -599,7 +602,7 @@ class BudgetStore {
     const defaultCats = [
       { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
       { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
-      { id: 'cat-daily', name: 'Daily Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
+      { id: 'cat-daily', name: 'Cutoff Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
       { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
       { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
     ];
