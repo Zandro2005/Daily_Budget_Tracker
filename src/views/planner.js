@@ -313,13 +313,19 @@ export function renderPlanner() {
 
       <!-- Budget Allocation Bar -->
       <div style="background: var(--bg-card-cloud); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.65rem 0.85rem; margin-bottom: ${isOverallocated ? '0.75rem' : '1.15rem'};">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.35rem;">
-          <span style="color: var(--text-secondary);">
-            Allocated: <strong style="color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--primary)'};">${formatCurrency(totalAllocated, curr)}</strong> of ${formatCurrency(cutoffSpendBudget, curr)}
-          </span>
-          <span style="color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--text-muted)'};">
-            ${isOverallocated ? `Over by ${formatCurrency(overlapDiff, curr)}` : `Remaining: ${formatCurrency(Math.max(0, unallocated), curr)}`}
-          </span>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+          <div>
+            <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;">Allocated</div>
+            <div style="font-family: var(--font-display); font-size: 1rem; font-weight: 800; color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--primary)'}; margin-top: 0.1rem;">
+              ${formatCurrency(totalAllocated, curr)} <span style="font-size: 0.74rem; font-weight: 600; color: var(--text-muted);">of ${formatCurrency(cutoffSpendBudget, curr)}</span>
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;">${isOverallocated ? 'Over by' : 'Remaining'}</div>
+            <div style="font-family: var(--font-display); font-size: 1rem; font-weight: 800; color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--text-main)'}; margin-top: 0.1rem;">
+              ${isOverallocated ? formatCurrency(overlapDiff, curr) : formatCurrency(Math.max(0, unallocated), curr)}
+            </div>
+          </div>
         </div>
         <div class="cloud-progress" style="height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
           <div class="cloud-progress-fill ${isOverallocated ? 'status-danger' : 'status-safe'}" style="width: ${allocPercent}%; transition: width 0.3s ease;"></div>
