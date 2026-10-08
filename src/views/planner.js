@@ -253,12 +253,24 @@ export function renderPlanner() {
           </h3>
           <span style="font-size: 0.72rem; color: var(--text-muted);">Tap any envelope to set its limit for this cutoff</span>
         </div>
+        <button class="icon-btn squish-btn" id="add-env-btn" style="width: 32px; height: 32px; background: var(--primary); color: white; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;" title="Add Envelope">
+          ${ICONS.plus}
+        </button>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 0.85rem;" id="envelopes-list"></div>
     `;
 
     const envelopesList = envelopesCard.querySelector('#envelopes-list');
+    
+    const addEnvBtn = envelopesCard.querySelector('#add-env-btn');
+    if (addEnvBtn) {
+      addEnvBtn.onclick = () => {
+        playPop();
+        openLimitModal(null, selectedCutoff);
+      };
+    }
+
     const filteredCats = catSpendings.filter(c => !c.name.toLowerCase().includes('income'));
 
     filteredCats.forEach(cat => {
@@ -425,24 +437,31 @@ export function renderPlanner() {
 
   // Adjust Category Limit strictly for this Specific Cutoff
   function openLimitModal(cat, cutoff) {
+    const isEdit = Boolean(cat);
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop open';
 
     const curr = store.getSettings().currency || '₱';
-    const currentLimit = cat.period_limit || Math.round((cat.monthly_limit || 0) / 2) || 0;
+    const currentLimit = isEdit ? (cat.period_limit || Math.round((cat.monthly_limit || 0) / 2) || 0) : 0;
+    const catName = isEdit ? cat.name : '';
 
     backdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
           <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.45rem;">
-            <span style="color: var(--primary); display: flex;">${getCategoryIconSvg(cat.id || cat.name)}</span>
-            <span>${cat.name} (${cutoff.label})</span>
+            ${isEdit ? `<span style="color: var(--primary); display: flex;">${getCategoryIconSvg(cat.id || cat.name)}</span>` : ''}
+            <span>${isEdit ? `${cat.name} (${cutoff.label})` : 'New Envelope'}</span>
           </h3>
           <button class="modal-close" id="limit-close">&times;</button>
         </div>
         <form id="limit-form">
           <div class="form-group">
-            <label class="form-label">Cutoff Limit for ${cat.name} (${curr})</label>
+            <label class="form-label">Envelope Name</label>
+            <input type="text" id="env-name" class="form-input" required value="${catName}" placeholder="e.g. Groceries, Dine Out...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Cutoff Limit (${curr})</label>
             <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${currentLimit}" step="any">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
               Spending limit strictly for the ${cutoff.label} period
@@ -453,9 +472,17 @@ export function renderPlanner() {
             <button type="button" class="preset-chip" data-v="1000">+1,000</button>
             <button type="button" class="preset-chip" data-v="2000">+2,000</button>
           </div>
-          <button type="submit" class="btn btn-primary squish-btn" style="width: 100%; padding: 0.85rem;">
-            Save Cutoff Limit
-          </button>
+          
+          <div style="display: flex; gap: 0.5rem;">
+            ${isEdit && (!cat.id || !cat.id.startsWith('cat-income')) ? `
+              <button type="button" class="btn btn-danger squish-btn" id="env-delete-btn" style="flex: 1; padding: 0.85rem;">
+                Delete
+              </button>
+            ` : ''}
+            <button type="submit" class="btn btn-primary squish-btn" style="flex: ${isEdit ? '2' : '1'}; padding: 0.85rem;">
+              Save Envelope
+            </button>
+          </div>
         </form>
       </div>
     `;
@@ -480,12 +507,35 @@ export function renderPlanner() {
       };
     });
 
+    const deleteBtn = backdrop.querySelector('#env-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.onclick = () => {
+        if (confirm(`Delete envelope "${cat.name}"?`)) {
+          store.deleteCategory(cat.id);
+          showToast({ text: 'Envelope deleted' });
+          close();
+          renderContent();
+        }
+      };
+    }
+
     backdrop.querySelector('#limit-form').onsubmit = (e) => {
       e.preventDefault();
       const val = parseFloat(input.value) || 0;
-      store.updateCutoffCategoryLimit(cutoff.id, cat.id, val);
+      const nameVal = backdrop.querySelector('#env-name').value;
+      
+      let targetCatId;
+      if (isEdit) {
+        targetCatId = cat.id;
+        store.updateCategory(cat.id, { name: nameVal });
+      } else {
+        const newCat = store.addCategory({ name: nameVal, monthly_limit: val * 2 });
+        targetCatId = newCat.id;
+      }
+      
+      store.updateCutoffCategoryLimit(cutoff.id, targetCatId, val);
       playCoin();
-      showToast({ text: `Updated ${cat.name} limit for ${cutoff.label}! 🏷️`, icon: '✨' });
+      showToast({ text: `Saved ${nameVal}! 🏷️`, icon: '✨' });
       close();
       renderContent();
     };

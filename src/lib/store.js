@@ -737,7 +737,6 @@ class BudgetStore {
     const nominalSum = this.categories.reduce((acc, c) => acc + ((c.monthly_limit || 0) / 2), 0);
 
     return this.categories
-      .filter(c => c.monthly_limit > 0 || spendMap[c.id])
       .map(cat => {
         const spent = spendMap[cat.id] ? spendMap[cat.id].total : 0;
         const billsSpent = spendMap[cat.id] ? spendMap[cat.id].billsTotal : 0;
