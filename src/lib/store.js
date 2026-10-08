@@ -1543,6 +1543,9 @@ class BudgetStore {
     localStorage.setItem(STORAGE_KEYS.FIREBASE_INITIALIZED, 'true');
 
     this.applyTheme(this.settings.theme);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('lyka:reset-payday-dismissal'));
+    }
     this.notify();
 
     const db = getDb();
