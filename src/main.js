@@ -91,9 +91,9 @@ function initApp() {
           ${ICONS.history}
           <span>History</span>
         </button>
-        <button class="nav-link" data-route="#calendar" title="Calendar">
+        <button class="nav-link" data-route="#calendar" title="Daily Tracker">
           ${ICONS.calendarDays}
-          <span>Calendar</span>
+          <span>Daily</span>
         </button>
       </nav>
     </div>

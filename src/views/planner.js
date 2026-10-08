@@ -241,28 +241,103 @@ export function renderPlanner() {
       }
     }
 
-    // 6. Cutoff Category Envelopes (Planned vs Actual for this cutoff)
+    // Helper function for Windows Folder SVG
+    function getWindowsFolderSvg(uniqueId) {
+      const safeId = String(uniqueId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      return `
+        <svg viewBox="0 0 100 86" width="84" height="72" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 8px rgba(220, 160, 20, 0.28));">
+          <defs>
+            <linearGradient id="wfBackGrad_${safeId}" x1="20" y1="10" x2="80" y2="70" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#FFD65C"/>
+              <stop offset="100%" stop-color="#EAA615"/>
+            </linearGradient>
+            <linearGradient id="wfFrontGrad_${safeId}" x1="15" y1="26" x2="85" y2="80" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#FFE785"/>
+              <stop offset="40%" stop-color="#FED049"/>
+              <stop offset="100%" stop-color="#F3AE1A"/>
+            </linearGradient>
+            <linearGradient id="wfSpineGrad_${safeId}" x1="10" y1="26" x2="20" y2="76" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#F7BE2F"/>
+              <stop offset="100%" stop-color="#D9940A"/>
+            </linearGradient>
+          </defs>
+          
+          <!-- Back Tab & Back Plate (Perspective) -->
+          <path d="M 18 12 C 18 10 19.5 8.5 21.5 8.5 L 43 8.5 C 45 8.5 46.5 9.5 47.5 11 L 52 17 L 85 17 C 87.5 17 89 18.5 89 21 L 89 65 C 89 67 87.5 68.5 85 68.5 L 21.5 68.5 C 19.5 68.5 18 67 18 65 Z" fill="url(#wfBackGrad_${safeId})"/>
+          
+          <!-- Paper sheet peeking inside -->
+          <rect x="25" y="16" width="56" height="36" rx="2" fill="#FFFFFF" fill-opacity="0.95"/>
+          <rect x="30" y="22" width="34" height="2.5" rx="1.25" fill="#CBD5E1"/>
+          <rect x="30" y="27" width="44" height="2.5" rx="1.25" fill="#E2E8F0"/>
+          <rect x="30" y="32" width="24" height="2.5" rx="1.25" fill="#E2E8F0"/>
+
+          <!-- Left spine / opening angle (Perspective 3D effect) -->
+          <path d="M 14 30 L 22 24 L 22 72 L 14 78 Z" fill="url(#wfSpineGrad_${safeId})"/>
+
+          <!-- Front Open Flap (angled out towards user) -->
+          <path d="M 22 24 C 22 22.5 23.5 21.5 25 21.5 L 89 21.5 C 91 21.5 92.5 22.8 92.8 24.8 L 97 68 C 97.2 70.2 95.5 72 93.3 72 L 23 72 C 21.5 72 20.5 71 20.5 69.5 L 22 24 Z" fill="url(#wfFrontGrad_${safeId})"/>
+          
+          <!-- Front Flap Top Lip Highlight -->
+          <path d="M 23 23 L 89 23" stroke="#FFF7C2" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      `;
+    }
+
+    // 6. Cutoff Category Envelopes (Windows File Explorer Folder Style)
     const envelopesCard = document.createElement('div');
     envelopesCard.className = 'cloud-card';
     envelopesCard.style.padding = '1.25rem';
+
+    const cutoffSpendBudget = plan.spendBudget || 0;
+    const filteredCats = catSpendings.filter(c => !c.name.toLowerCase().includes('income'));
+    const totalAllocated = filteredCats.reduce((acc, c) => acc + (c.period_limit || 0), 0);
+    const isOverallocated = cutoffSpendBudget > 0 && totalAllocated > cutoffSpendBudget;
+    const overlapDiff = totalAllocated - cutoffSpendBudget;
+    const unallocated = cutoffSpendBudget - totalAllocated;
+    const allocPercent = cutoffSpendBudget > 0 ? Math.min(100, Math.round((totalAllocated / cutoffSpendBudget) * 100)) : 0;
+
     envelopesCard.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
         <div>
-          <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
-            ${ICONS.folder} ${isSemi ? `${selectedCutoff.label} Envelopes` : 'Category Envelopes'}
+          <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 0.4rem; margin: 0; color: var(--text-main);">
+            ${isSemi ? `${selectedCutoff.label} Envelopes` : 'Category Envelopes'}
           </h3>
-          <span style="font-size: 0.72rem; color: var(--text-muted);">Tap any envelope to set its limit for this cutoff</span>
+          <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
+            Cutoff Spend Budget: <strong style="color: var(--text-main);">${formatCurrency(cutoffSpendBudget, curr)}</strong>
+          </span>
         </div>
-        <button class="icon-btn squish-btn" id="add-env-btn" style="width: 32px; height: 32px; background: var(--primary); color: white; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;" title="Add Envelope">
-          ${ICONS.plusCircle}
+        <button class="btn btn-primary squish-btn" id="add-env-btn" style="padding: 0.45rem 0.95rem; font-size: 0.78rem; font-weight: 700; border-radius: var(--radius-full);">
+          Add
         </button>
       </div>
 
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;" id="envelopes-list"></div>
+      <!-- Budget Allocation Bar -->
+      <div style="background: var(--bg-card-cloud); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.65rem 0.85rem; margin-bottom: ${isOverallocated ? '0.75rem' : '1.15rem'};">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.35rem;">
+          <span style="color: var(--text-secondary);">
+            Allocated: <strong style="color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--primary)'};">${formatCurrency(totalAllocated, curr)}</strong> of ${formatCurrency(cutoffSpendBudget, curr)}
+          </span>
+          <span style="color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--text-muted)'};">
+            ${isOverallocated ? `Over by ${formatCurrency(overlapDiff, curr)}` : `Remaining: ${formatCurrency(Math.max(0, unallocated), curr)}`}
+          </span>
+        </div>
+        <div class="cloud-progress" style="height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+          <div class="cloud-progress-fill ${isOverallocated ? 'status-danger' : 'status-safe'}" style="width: ${allocPercent}%; transition: width 0.3s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Overlap Warning Banner -->
+      ${isOverallocated ? `
+        <div style="background: rgba(255, 123, 137, 0.12); border: 1.5px solid var(--coral-alert); border-radius: var(--radius-md); padding: 0.65rem 0.85rem; margin-bottom: 1.15rem; color: var(--coral-alert); font-size: 0.78rem; font-weight: 700; line-height: 1.35;">
+          ⚠️ Budget Warning: Envelope allocations (${formatCurrency(totalAllocated, curr)}) overlap and exceed your cutoff spend budget (${formatCurrency(cutoffSpendBudget, curr)}) by ${formatCurrency(overlapDiff, curr)}. Adjust limits to stay within budget.
+        </div>
+      ` : ''}
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1rem 0.65rem; justify-items: center;" id="envelopes-list"></div>
     `;
 
     const envelopesList = envelopesCard.querySelector('#envelopes-list');
-    
+
     const addEnvBtn = envelopesCard.querySelector('#add-env-btn');
     if (addEnvBtn) {
       addEnvBtn.onclick = () => {
@@ -271,8 +346,6 @@ export function renderPlanner() {
       };
     }
 
-    const filteredCats = catSpendings.filter(c => !c.name.toLowerCase().includes('income'));
-
     filteredCats.forEach(cat => {
       const limit = isSemi ? (cat.period_limit || 0) : (cat.monthly_limit || 0);
       const isOver = limit > 0 && cat.spent > limit;
@@ -280,32 +353,42 @@ export function renderPlanner() {
       const statusClass = isOver ? 'status-danger' : percent >= 80 ? 'status-warn' : 'status-safe';
 
       const itemEl = document.createElement('div');
-      itemEl.style.cssText = 'background: var(--bg-card-cloud); padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s ease;';
+      itemEl.className = 'folder-item squish-btn';
+      itemEl.title = `Click to set limit for ${cat.name}`;
 
       itemEl.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.4rem;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div style="display: flex; align-items: center; gap: 0.3rem;">
-              <div style="width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
-                ${getCategoryIconSvg(cat.id || cat.name)}
-              </div>
-            </div>
-            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;">
-              <span class="pill" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--danger)' : 'var(--text-main)'}; font-weight: 700;">
-                ${limit > 0 ? (isOver ? `+${formatCurrency(cat.spent - limit, curr)}` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)}`) : 'No Limit'}
-              </span>
-            </div>
-          </div>
-          <div>
-            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main); line-height: 1.1; margin-bottom: 0.15rem;">${cat.name}</div>
-            <div style="font-size: 0.7rem; color: var(--text-muted);">
-              Spent: <strong style="color: var(--text-main);">${formatCurrency(cat.spent, curr)}</strong>
-            </div>
-          </div>
+        <div style="position: relative; display: flex; justify-content: center; width: 100%; margin-bottom: 0.3rem;">
+          ${getWindowsFolderSvg(cat.id || cat.name)}
+          ${isOver ? `
+            <div style="position: absolute; top: -2px; right: 8px; background: var(--coral-alert); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.72rem; box-shadow: 0 2px 6px rgba(255,100,100,0.4); border: 2px solid white;">!</div>
+          ` : ''}
+        </div>
+        
+        <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.88rem; color: var(--text-main); line-height: 1.15; word-break: break-word; max-width: 120px; text-align: center; margin-bottom: 0.2rem;">
+          ${cat.name}
         </div>
 
-        <div class="cloud-progress" style="height: 6px;">
-          <div class="cloud-progress-fill ${statusClass}" style="width: ${percent}%;"></div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center;">
+          ${limit > 0 ? `Allocated: <strong style="color: var(--text-main);">${formatCurrency(limit, curr)}</strong>` : 'No Budget'}
+        </div>
+
+        <div style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">
+          Spent: <strong style="color: var(--text-main);">${formatCurrency(cat.spent, curr)}</strong>
+        </div>
+
+        <div style="margin-top: 0.25rem; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; width: 100%;">
+          ${limit > 0 ? `
+            <span class="pill" style="font-size: 0.64rem; padding: 0.12rem 0.45rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--coral-alert)' : 'var(--primary)'}; font-weight: 700; border: 1px solid ${isOver ? 'rgba(255,123,137,0.3)' : 'var(--border-color)'};">
+              ${isOver ? `Over by ${formatCurrency(cat.spent - limit, curr)}` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)} left`}
+            </span>
+            <div class="cloud-progress" style="height: 4px; width: 62px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+              <div class="cloud-progress-fill ${statusClass}" style="width: ${percent}%;"></div>
+            </div>
+          ` : `
+            <span class="pill" style="font-size: 0.64rem; padding: 0.12rem 0.45rem; background: var(--bg-card-cloud); color: var(--text-muted); font-weight: 700; border: 1px solid var(--border-color);">
+              Tap to allocate
+            </span>
+          `}
         </div>
       `;
 
@@ -452,21 +535,21 @@ export function renderPlanner() {
         <div class="modal-header">
           <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.45rem;">
             ${isEdit ? `<span style="color: var(--primary); display: flex;">${getCategoryIconSvg(cat.id || cat.name)}</span>` : ''}
-            <span>${isEdit ? `${cat.name} (${cutoff.label})` : 'New Envelope'}</span>
+            <span>${isEdit ? `Allocate: ${cat.name}` : 'New Envelope'}</span>
           </h3>
           <button class="modal-close" id="limit-close">&times;</button>
         </div>
         <form id="limit-form">
           <div class="form-group">
             <label class="form-label">Envelope Name</label>
-            <input type="text" id="env-name" class="form-input" required value="${catName}" placeholder="e.g. Groceries, Dine Out...">
+            <input type="text" id="env-name" class="form-input" required value="${catName}" placeholder="e.g. Bills, Shopping, Daily...">
           </div>
 
           <div class="form-group">
-            <label class="form-label">Cutoff Limit (${curr})</label>
-            <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${currentLimit}" step="any">
+            <label class="form-label">Allocated Budget (${curr})</label>
+            <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${currentLimit}" step="any" placeholder="0">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-              Spending limit strictly for the ${cutoff.label} period
+              ${isEdit && cat.id === 'cat-daily' ? 'Sets the base daily allowance for your Daily Tracker' : `Allocated portion of your ${cutoff.label} spend budget (${formatCurrency(plan.spendBudget, curr)})`}
             </small>
           </div>
           <div class="quick-amount-presets" style="margin-bottom: 1.25rem;">
@@ -482,7 +565,7 @@ export function renderPlanner() {
               </button>
             ` : ''}
             <button type="submit" class="btn btn-primary squish-btn" style="flex: ${isEdit ? '2' : '1'}; padding: 0.85rem;">
-              Save Envelope
+              Save Allocation
             </button>
           </div>
         </form>

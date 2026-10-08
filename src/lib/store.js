@@ -47,15 +47,13 @@ const FS_COLLECTIONS = {
   CUTOFFS: 'cloudy_cutoffs',
 };
 
+localStorage.removeItem(STORAGE_KEYS.CATEGORIES); // Force reset to new defaults for this change
 const DEFAULT_CATEGORIES = [
-  { id: 'cat-food', name: 'Food & Groceries', emoji: '🍱', color: '#FFD1DC', monthly_limit: 0 },
-  { id: 'cat-coffee', name: 'Coffee & Treats', emoji: '🧋', color: '#FFE5B4', monthly_limit: 0 },
-  { id: 'cat-transit', name: 'Transportation', emoji: '🚌', color: '#BFE3F7', monthly_limit: 0 },
-  { id: 'cat-bills', name: 'Bills & Utilities', emoji: '⚡', color: '#C8E6C9', monthly_limit: 0 },
-  { id: 'cat-shop', name: 'Shopping & Needs', emoji: '🛍️', color: '#E1BEE7', monthly_limit: 0 },
-  { id: 'cat-care', name: 'Self-Care & Health', emoji: '🌸', color: '#FFCDD2', monthly_limit: 0 },
-  { id: 'cat-fun', name: 'Fun & Hobbies', emoji: '🎮', color: '#FFF9C4', monthly_limit: 0 },
-  { id: 'cat-income', name: 'Salary & Income', emoji: '💼', color: '#B2DFDB', monthly_limit: 0 },
+  { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
+  { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
+  { id: 'cat-daily', name: 'Daily Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
+  { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
+  { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -84,8 +82,9 @@ class BudgetStore {
     this.unsubscribers = [];
     this.isCloudSyncActive = false;
 
-    // Load initial fast state from localStorage (clean empty state for transactions)
-    this.categories = this.load(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
+    // Load initial fast state from localStorage
+    this.categories = this.sanitizeCategories(this.load(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES));
+    this.save(STORAGE_KEYS.CATEGORIES, this.categories);
     this.transactions = this.load(STORAGE_KEYS.TRANSACTIONS, []);
     this.recurring = this.load(STORAGE_KEYS.RECURRING, []);
     this.goals = this.load(STORAGE_KEYS.GOALS, []);
@@ -97,6 +96,37 @@ class BudgetStore {
 
     // Initialize Firebase Realtime Listeners if configured
     this.initFirebase();
+  }
+
+  sanitizeCategories(cats) {
+    const legacyKeywords = [
+      'pagkain', 'zandro', 'coffee', 'treats', 'groceries', 'fun & hobbies',
+      'self-care', 'transportation', 'utilities'
+    ];
+    let filtered = (cats || []).filter(c => {
+      if (!c || !c.name) return false;
+      const lower = c.name.toLowerCase();
+      return !legacyKeywords.some(k => lower.includes(k));
+    });
+
+    const standard = [
+      { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
+      { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
+      { id: 'cat-daily', name: 'Daily Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
+      { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
+      { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
+    ];
+
+    standard.forEach(std => {
+      const existing = filtered.find(c => c.id === std.id || c.name.toLowerCase() === std.name.toLowerCase());
+      if (!existing) {
+        filtered.push(std);
+      } else {
+        existing.emoji = '';
+      }
+    });
+
+    return filtered;
   }
 
   load(key, fallback) {
@@ -153,8 +183,26 @@ class BudgetStore {
       const unsubCat = onSnapshot(collection(db, FS_COLLECTIONS.CATEGORIES), (snapshot) => {
         if (!snapshot.empty) {
           const remoteCats = [];
-          snapshot.forEach(docSnap => remoteCats.push(docSnap.data()));
-          this.categories = remoteCats;
+          const legacyIdsToDelete = [];
+          const legacyKeywords = ['pagkain', 'zandro', 'coffee', 'treats', 'groceries', 'fun & hobbies', 'self-care', 'transportation', 'utilities'];
+
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const lower = (data.name || '').toLowerCase();
+            if (legacyKeywords.some(k => lower.includes(k))) {
+              legacyIdsToDelete.push(docSnap.id);
+            } else {
+              remoteCats.push(data);
+            }
+          });
+
+          if (legacyIdsToDelete.length > 0) {
+            const batch = writeBatch(db);
+            legacyIdsToDelete.forEach(id => batch.delete(doc(db, FS_COLLECTIONS.CATEGORIES, id)));
+            batch.commit().catch(e => console.warn('Legacy category cleanup error:', e));
+          }
+
+          this.categories = this.sanitizeCategories(remoteCats);
           this.save(STORAGE_KEYS.CATEGORIES, this.categories);
           this.notify();
         } else {
@@ -547,6 +595,37 @@ class BudgetStore {
     }
   }
 
+  async resetToStandardEnvelopes() {
+    const defaultCats = [
+      { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
+      { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
+      { id: 'cat-daily', name: 'Daily Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
+      { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
+      { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
+    ];
+
+    const db = getDb();
+    if (db) {
+      try {
+        const batch = writeBatch(db);
+        this.categories.forEach(c => {
+          batch.delete(doc(db, FS_COLLECTIONS.CATEGORIES, c.id));
+        });
+        defaultCats.forEach(c => {
+          batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c);
+        });
+        await batch.commit();
+      } catch (err) {
+        console.warn('Error resetting categories in Firestore:', err);
+      }
+    }
+
+    this.categories = defaultCats;
+    this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+    this.notify();
+    return defaultCats;
+  }
+
   // --- SAVINGS & PLANNING HELPERS ---
   getSavingsRate() {
     if (this.settings.savingsRate !== undefined && this.settings.savingsRate !== null) {
@@ -800,13 +879,10 @@ class BudgetStore {
 
     const record = this.getCutoffRecord(cutoffId) || { id: cutoffId };
     record.categoryLimits = {
-      'cat-food': Math.round(needs * 0.50),
-      'cat-bills': Math.round(needs * 0.30),
-      'cat-transit': Math.round(needs * 0.20),
-      'cat-shop': Math.round(wants * 0.40),
-      'cat-coffee': Math.round(wants * 0.25),
-      'cat-fun': Math.round(wants * 0.20),
-      'cat-care': Math.round(wants * 0.15),
+      'cat-bills': Math.round(needs * 0.50),
+      'cat-daily': Math.round(needs * 0.50),
+      'cat-shopping': Math.round(wants * 0.60),
+      'cat-misc': Math.round(wants * 0.40),
     };
     record.savingsRate = 0.20;
     record.customSpendBudget = spendBudget;
@@ -1146,14 +1222,10 @@ class BudgetStore {
     const wants = income * 0.30; // Wants 30%
 
     // Allocate to default categories if present
-    this.updateCategoryLimit('cat-food', Math.round(needs * 0.50));
-    this.updateCategoryLimit('cat-bills', Math.round(needs * 0.30));
-    this.updateCategoryLimit('cat-transit', Math.round(needs * 0.20));
-
-    this.updateCategoryLimit('cat-shop', Math.round(wants * 0.40));
-    this.updateCategoryLimit('cat-coffee', Math.round(wants * 0.25));
-    this.updateCategoryLimit('cat-fun', Math.round(wants * 0.20));
-    this.updateCategoryLimit('cat-care', Math.round(wants * 0.15));
+    this.updateCategoryLimit('cat-bills', Math.round(needs * 0.50));
+    this.updateCategoryLimit('cat-daily', Math.round(needs * 0.50));
+    this.updateCategoryLimit('cat-shopping', Math.round(wants * 0.60));
+    this.updateCategoryLimit('cat-misc', Math.round(wants * 0.40));
 
     this.notify();
   }
