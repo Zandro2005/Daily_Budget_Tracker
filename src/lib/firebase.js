@@ -2,6 +2,7 @@
 // CLOUDY BUDGET - FIREBASE CLIENT & CONFIGURATION
 // Supports env vars (VITE_FIREBASE_*) & Settings override
 // Offline persistence enabled via IndexedDB multi-tab cache
+// Firebase Anonymous Auth for zero-login security
 // ====================================================================
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
@@ -11,24 +12,19 @@ import {
   persistentMultipleTabManager,
   getFirestore
 } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 const STORAGE_KEY = 'cloudy_firebase_config_v1';
 
-export function getFirebaseConfig() {
-  // 1. Check local storage override (can be set in Settings UI)
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed && parsed.projectId && parsed.apiKey) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to parse stored Firebase config:', e);
+// Clear any legacy credentials stored in localStorage for safety
+try {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY);
   }
+} catch (_) {}
 
-  // 2. Check Vite environment variables (from .env or build secrets)
+export function getFirebaseConfig() {
+  // Read exclusively from secure Vite environment variables (from .env or hosting secrets)
   const metaEnv = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (typeof process !== 'undefined' && process.env ? process.env : {});
   const envConfig = {
     apiKey: metaEnv.VITE_FIREBASE_API_KEY,
@@ -51,16 +47,9 @@ export function isFirebaseConfigured() {
   return Boolean(config && config.projectId && config.apiKey);
 }
 
-export function saveFirebaseConfig(config) {
-  if (!config) {
-    localStorage.removeItem(STORAGE_KEY);
-    return;
-  }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-}
-
 let firestoreInstance = null;
 let firebaseAppInstance = null;
+let authInstance = null;
 
 export function getFirebaseApp() {
   if (firebaseAppInstance) return firebaseAppInstance;
@@ -74,6 +63,29 @@ export function getFirebaseApp() {
     firebaseAppInstance = initializeApp(config);
   }
   return firebaseAppInstance;
+}
+
+export function getFirebaseAuth() {
+  if (authInstance) return authInstance;
+  const app = getFirebaseApp();
+  if (!app) return null;
+  authInstance = getAuth(app);
+  return authInstance;
+}
+
+export async function ensureAuth() {
+  const auth = getFirebaseAuth();
+  if (!auth) return null;
+
+  if (auth.currentUser) return auth.currentUser;
+
+  try {
+    const cred = await signInAnonymously(auth);
+    return cred.user;
+  } catch (err) {
+    console.warn('Anonymous auth notice:', err);
+    return null;
+  }
 }
 
 export function getDb() {
@@ -97,5 +109,30 @@ export function getDb() {
     }
   }
 
+  // Eagerly trigger anonymous sign-in so requests are authorized
+  ensureAuth().catch(() => {});
+
   return firestoreInstance;
 }
+
+// --- SYNC STATUS TRACKER ---
+let currentSyncStatus = 'offline'; // 'offline' | 'synced' | 'syncing' | 'error'
+const syncListeners = new Set();
+
+export function getSyncStatus() {
+  return currentSyncStatus;
+}
+
+export function setSyncStatus(status) {
+  if (currentSyncStatus === status) return;
+  currentSyncStatus = status;
+  syncListeners.forEach(fn => {
+    try { fn(currentSyncStatus); } catch (_) {}
+  });
+}
+
+export function onSyncStatusChange(fn) {
+  syncListeners.add(fn);
+  return () => syncListeners.delete(fn);
+}
+

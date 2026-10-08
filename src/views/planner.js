@@ -4,7 +4,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, getPreviousCutoff, getNextCutoff, isDateInRange, formatDate } from '../lib/format.js';
+import { formatCurrency, getPreviousCutoff, getNextCutoff, isDateInRange, formatDate, escapeHtml } from '../lib/format.js';
 import { playPop, playCoin, playSuccess } from '../lib/audio.js';
 import { firePastelConfetti } from '../lib/confetti.js';
 import { showToast } from '../components/toast.js';
@@ -230,7 +230,7 @@ export function renderPlanner() {
             ${cutoffBills.map(b => `
               <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card-cloud); padding: 0.55rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.82rem;">
                 <div>
-                  <span style="font-weight: 700;">${b.name}</span>
+                  <span style="font-weight: 700;">${escapeHtml(b.name)}</span>
                   <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 0.35rem;">Due ${formatDate(b.nextDue)}</span>
                 </div>
                 <span style="font-weight: 800; font-family: var(--font-display);">${formatCurrency(b.amount, curr)}</span>
@@ -375,7 +375,7 @@ export function renderPlanner() {
         </div>
         
         <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.94rem; color: var(--text-main); line-height: 1.2; text-align: center; margin-bottom: 0.35rem; width: 100%;">
-          ${cat.name}
+          ${escapeHtml(cat.name)}
         </div>
 
         ${limit > 0 ? `
@@ -555,14 +555,14 @@ export function renderPlanner() {
         <div class="modal-header">
           <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.45rem;">
             ${isEdit ? `<span style="color: var(--primary); display: flex;">${getCategoryIconSvg(cat.id || cat.name)}</span>` : ''}
-            <span>${isEdit ? `Allocate: ${cat.name}` : 'New Envelope'}</span>
+            <span>${isEdit ? `Allocate: ${escapeHtml(cat.name)}` : 'New Envelope'}</span>
           </h3>
           <button class="modal-close" id="limit-close">&times;</button>
         </div>
         <form id="limit-form">
           <div class="form-group">
             <label class="form-label">Envelope Name</label>
-            <input type="text" id="env-name" class="form-input" required value="${catName}" placeholder="e.g. Bills, Shopping, Daily...">
+            <input type="text" id="env-name" class="form-input" required value="${escapeHtml(catName)}" placeholder="e.g. Bills, Shopping, Daily...">
           </div>
 
           <div class="form-group">

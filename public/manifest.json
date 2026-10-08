@@ -1,0 +1,26 @@
+{
+  "name": "Lyka Wallet - Smart Budget Tracker",
+  "short_name": "Lyka Wallet",
+  "description": "Smart, cheerful personal budget tracker with semi-monthly cutoff allowance and strict savings protection.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F4F9FD",
+  "theme_color": "#BFE3F7",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/mascot/happy.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

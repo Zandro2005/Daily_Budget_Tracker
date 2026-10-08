@@ -1,7 +1,7 @@
 // ====================================================================
-// LYKA WALLET - SIMPLE QUICK ADD MODAL
+// LYKA WALLET - QUICK ADD & EDIT TRANSACTION MODAL
 // Clean, elegant logger with cutoff range pill, strict savings protection,
-// and real-time tight budget warnings
+// symmetrical layout, and full transaction editing support.
 // ====================================================================
 
 import { store } from '../lib/store.js';
@@ -13,6 +13,7 @@ import { ICONS } from '../lib/icons.js';
 
 let modalInstance = null;
 let currentSelectedType = 'expense';
+let currentEditingTx = null;
 
 export function openQuickAddModal(initialType = 'expense', options = {}) {
   try {
@@ -28,7 +29,8 @@ export function openQuickAddModal(initialType = 'expense', options = {}) {
     // Always re-append to ensure it sits on top in DOM order
     document.body.appendChild(modalInstance);
 
-    resetModalState(initialType, options.date);
+    currentEditingTx = options.editTx || null;
+    resetModalState(initialType, options.date, currentEditingTx);
     modalInstance.classList.add('open');
     const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     const amountInput = modalInstance.querySelector('#qa-amount');
@@ -43,31 +45,57 @@ export function openQuickAddModal(initialType = 'expense', options = {}) {
 export function closeQuickAddModal() {
   if (modalInstance) {
     modalInstance.classList.remove('open');
+    currentEditingTx = null;
   }
 }
 
-function resetModalState(type = 'expense', presetDate = null) {
+function resetModalState(type = 'expense', presetDate = null, editTx = null) {
   if (!modalInstance) return;
-  currentSelectedType = type;
+  const targetType = editTx ? editTx.type : type;
+  currentSelectedType = targetType;
+  currentEditingTx = editTx || null;
+
   const form = modalInstance.querySelector('#qa-form');
   if (form) form.reset();
 
   const dialog = modalInstance.querySelector('.modal-dialog');
   if (dialog) dialog.scrollTop = 0;
 
+  const titleEl = modalInstance.querySelector('#qa-modal-title');
+  if (titleEl) {
+    titleEl.textContent = editTx ? 'Edit Transaction' : 'Add Transaction';
+  }
+
+  const submitBtn = modalInstance.querySelector('#qa-submit-btn');
+  if (submitBtn) {
+    submitBtn.textContent = editTx ? 'Save Changes' : 'Save Transaction';
+  }
+
   const typeButtons = modalInstance.querySelectorAll('.qa-type-btn');
   typeButtons.forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.type === type);
+    btn.classList.toggle('active', btn.dataset.type === targetType);
   });
 
-  const dateInput = modalInstance.querySelector('#qa-date');
-  if (dateInput) dateInput.value = presetDate || getTodayDateString();
+  const amountInput = modalInstance.querySelector('#qa-amount');
+  if (amountInput) {
+    amountInput.value = editTx ? editTx.amount : '';
+  }
 
-  renderCategoryChips(type, modalInstance);
+  const noteInput = modalInstance.querySelector('#qa-note');
+  if (noteInput) {
+    noteInput.value = editTx ? (editTx.note || '') : '';
+  }
+
+  const dateInput = modalInstance.querySelector('#qa-date');
+  if (dateInput) {
+    dateInput.value = editTx ? editTx.date : (presetDate || getTodayDateString());
+  }
+
+  renderCategoryChips(targetType, modalInstance, editTx ? editTx.categoryId : null);
   updateBudgetValidation(modalInstance);
 }
 
-function renderCategoryChips(type, root = modalInstance) {
+function renderCategoryChips(type, root = modalInstance, selectedCategoryId = null) {
   if (!root) return;
   const container = root.querySelector('#qa-category-list');
   if (!container) return;
@@ -81,9 +109,10 @@ function renderCategoryChips(type, root = modalInstance) {
   const displayList = filtered.length > 0 ? filtered : categories;
 
   displayList.forEach((cat, index) => {
+    const isSelected = selectedCategoryId ? cat.id === selectedCategoryId : index === 0;
     const pill = document.createElement('button');
     pill.type = 'button';
-    pill.className = `qa-cat-pill ${index === 0 ? 'selected' : ''}`;
+    pill.className = `qa-cat-pill ${isSelected ? 'selected' : ''}`;
     pill.dataset.id = cat.id;
     pill.textContent = cat.name;
 
@@ -108,7 +137,7 @@ function updateBudgetValidation(root = modalInstance) {
   const amountInput = root.querySelector('#qa-amount');
   const cutoffPill = root.querySelector('#qa-cutoff-pill');
   const alertEl = root.querySelector('#qa-budget-alert');
-  const submitBtn = root.querySelector('.qa-submit-btn');
+  const submitBtn = root.querySelector('#qa-submit-btn');
   if (!cutoffPill || !alertEl || !submitBtn) return;
 
   const dateVal = (dateInput && dateInput.value) ? dateInput.value : getTodayDateString();
@@ -132,7 +161,13 @@ function updateBudgetValidation(root = modalInstance) {
   // Expense mode:
   const amountVal = parseFloat(amountInput.value) || 0;
 
-  if (summary.budgetLimit <= 0) {
+  // If editing an existing expense in this cutoff, add back original amount to compute effective remaining budget
+  let effectiveRemaining = summary.remainingBudget;
+  if (currentEditingTx && currentEditingTx.type === 'expense') {
+    effectiveRemaining += (parseFloat(currentEditingTx.amount) || 0);
+  }
+
+  if (summary.budgetLimit <= 0 && !currentEditingTx) {
     // Insufficient income: No income logged yet for this cutoff!
     alertEl.style.display = 'block';
     alertEl.style.background = 'rgba(255, 235, 237, 0.95)';
@@ -148,7 +183,7 @@ function updateBudgetValidation(root = modalInstance) {
     submitBtn.disabled = true;
     submitBtn.style.opacity = '0.5';
     submitBtn.style.cursor = 'not-allowed';
-  } else if (amountVal > summary.remainingBudget) {
+  } else if (amountVal > effectiveRemaining) {
     // Insufficient spend budget: exceeds spend budget and would compromise savings!
     alertEl.style.display = 'block';
     alertEl.style.background = 'rgba(255, 235, 237, 0.95)';
@@ -159,14 +194,14 @@ function updateBudgetValidation(root = modalInstance) {
         <span style="display: flex; width: 15px; height: 15px;">${ICONS.alertTriangle}</span>
         <span>Insufficient Spend Budget</span>
       </div>
-      <div>Only <strong>${formatCurrency(summary.remainingBudget, curr)}</strong> left in this cutoff. Savings of <strong>${formatCurrency(summary.plan.savingsTarget, curr)}</strong> is protected and cannot be touched.</div>
+      <div>Only <strong>${formatCurrency(effectiveRemaining, curr)}</strong> available for this cutoff. Savings of <strong>${formatCurrency(summary.plan.savingsTarget, curr)}</strong> is protected and cannot be touched.</div>
     `;
     submitBtn.disabled = true;
     submitBtn.style.opacity = '0.5';
     submitBtn.style.cursor = 'not-allowed';
-  } else if (amountVal > 0 && (summary.remainingBudget - amountVal) <= summary.budgetLimit * 0.20) {
+  } else if (amountVal > 0 && (effectiveRemaining - amountVal) <= summary.budgetLimit * 0.20) {
     // Tight Budget Warning on prospective expense!
-    const remAfter = Math.max(0, summary.remainingBudget - amountVal);
+    const remAfter = Math.max(0, effectiveRemaining - amountVal);
     alertEl.style.display = 'block';
     alertEl.style.background = 'rgba(255, 251, 230, 0.95)';
     alertEl.style.border = '1.5px solid #FFD666';
@@ -192,7 +227,7 @@ function updateBudgetValidation(root = modalInstance) {
         <span style="display: flex; width: 15px; height: 15px;">${ICONS.alertTriangle}</span>
         <span>Budget is Tight</span>
       </div>
-      <div>Only <strong>${formatCurrency(summary.remainingBudget, curr)}</strong> left (${Math.round(summary.usagePercent)}% used) for ${cutoff.label}. Savings (${formatCurrency(summary.plan.savingsTarget, curr)}) is safe.</div>
+      <div>Only <strong>${formatCurrency(effectiveRemaining, curr)}</strong> left (${Math.round(summary.usagePercent)}% used) for ${cutoff.label}. Savings (${formatCurrency(summary.plan.savingsTarget, curr)}) is safe.</div>
     `;
     submitBtn.disabled = false;
     submitBtn.style.opacity = '1';
@@ -216,7 +251,7 @@ function createModalDOM() {
     <div class="modal-dialog">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <h3 class="modal-title" style="margin: 0;">Add Transaction</h3>
+          <h3 class="modal-title" id="qa-modal-title" style="margin: 0;">Add Transaction</h3>
           <!-- Cutoff Range Pill on the top only -->
           <span id="qa-cutoff-pill" class="pill" style="font-size: 0.68rem; font-weight: 800; background: #FFF9E6; border: 1px solid #FFE58F; color: #8C6D00; padding: 0.08rem 0.45rem; border-radius: var(--radius-full);">
             Cutoff
@@ -276,8 +311,8 @@ function createModalDOM() {
           </div>
         </div>
 
-        <!-- Balanced Full-Width Save Button -->
-        <button type="submit" class="qa-submit-btn squish-btn">
+        <!-- Balanced Full-Width Save / Update Button -->
+        <button type="submit" class="qa-submit-btn squish-btn" id="qa-submit-btn">
           Save Transaction
         </button>
       </form>
@@ -336,19 +371,50 @@ function createModalDOM() {
 
     // Strict validation
     if (selectedType === 'expense') {
-      if (summary.budgetLimit <= 0) {
+      let effectiveRemaining = summary.remainingBudget;
+      if (currentEditingTx && currentEditingTx.type === 'expense') {
+        effectiveRemaining += (parseFloat(currentEditingTx.amount) || 0);
+      }
+
+      if (summary.budgetLimit <= 0 && !currentEditingTx) {
         playPop();
         showToast({ text: `Cannot log expense: No income logged yet for ${cutoff.label}. Please log income first.` });
         return;
       }
-      if (amountVal > summary.remainingBudget) {
+      if (amountVal > effectiveRemaining) {
         playPop();
-        showToast({ text: `Insufficient spend budget! Only ${formatCurrency(summary.remainingBudget, currentCurr)} available.` });
+        showToast({ text: `Insufficient spend budget! Only ${formatCurrency(effectiveRemaining, currentCurr)} available.` });
         return;
       }
     }
 
     try {
+      if (currentEditingTx) {
+        // Update existing transaction
+        const oldTx = { ...currentEditingTx };
+        const updatedTx = store.updateTransaction(currentEditingTx.id, {
+          type: selectedType,
+          amount: amountVal,
+          categoryId,
+          note,
+          date,
+        });
+
+        playCoin();
+        showToast({
+          text: `Updated to ${selectedType === 'income' ? '+' : '-'}${formatCurrency(amountVal, currentCurr)}`,
+          icon: 'check',
+          onUndo: () => {
+            store.updateTransaction(oldTx.id, oldTx);
+            showToast({ text: 'Changes reverted' });
+          },
+        });
+
+        closeQuickAddModal();
+        return;
+      }
+
+      // Add new transaction
       const newTx = store.addTransaction({
         type: selectedType,
         amount: amountVal,

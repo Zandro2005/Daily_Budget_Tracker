@@ -4,7 +4,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, formatDate } from '../lib/format.js';
+import { formatCurrency, formatDate, escapeHtml } from '../lib/format.js';
 import { playPop, playSuccess, playCoin } from '../lib/audio.js';
 import { firePastelConfetti } from '../lib/confetti.js';
 import { showToast } from '../components/toast.js';
@@ -73,7 +73,7 @@ export function renderGoals() {
                 ${ICONS.target}
               </div>
               <div>
-                <h4 style="font-size: 1.1rem; font-weight: 700; margin: 0;">${goal.name}</h4>
+                <h4 style="font-size: 1.1rem; font-weight: 700; margin: 0;">${escapeHtml(goal.name)}</h4>
                 <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">
                   Target: ${formatCurrency(goal.targetAmount, curr)} ${goal.deadline ? `&bull; By ${formatDate(goal.deadline)}` : ''}
                 </span>
@@ -206,7 +206,7 @@ export function renderGoals() {
     modalBackdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title">Add to ${goal.name}</h3>
+          <h3 class="modal-title">Add to ${escapeHtml(goal.name)}</h3>
           <button class="modal-close" id="contrib-close">&times;</button>
         </div>
         <form id="contrib-form">

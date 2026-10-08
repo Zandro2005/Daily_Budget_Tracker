@@ -5,10 +5,9 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, formatDate, stripEmojis } from '../lib/format.js';
+import { formatCurrency, formatDate, stripEmojis, escapeHtml } from '../lib/format.js';
 import { renderMascot } from '../components/mascot.js';
 import { renderPaydayCard } from '../components/paydayCard.js';
-import { playPop } from '../lib/audio.js';
 import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
 export function renderDashboard() {
@@ -23,14 +22,11 @@ export function renderDashboard() {
   const curCutoff = store.getCurrentCutoff();
   const summary = isSemi ? store.getCutoffSummary(curCutoff) : store.getMonthSummary();
 
-
   // 1. Payday Alert Banner (shown only when a payday is ready to confirm)
   const paydayBanner = renderPaydayCard();
   if (paydayBanner) {
     container.appendChild(paydayBanner);
   }
-
-
 
   // Tight Budget Warning Banner
   if (summary.budgetLimit > 0 && summary.isTight) {
@@ -87,9 +83,7 @@ export function renderDashboard() {
     container.appendChild(exhaustedBanner);
   }
 
-
-
-  // 4. Period Balance Hero Card (with mascot companion)
+  // 2. Period Balance Hero Card (with mascot companion)
   const heroCard = document.createElement('div');
   heroCard.className = 'hero-card';
   heroCard.style.marginBottom = '1.25rem';
@@ -131,7 +125,7 @@ export function renderDashboard() {
         </span>
       </div>
 
-      <!-- Smaller, Clean Side-by-Side Spent & Saved -->
+      <!-- Clean Side-by-Side Spent & Saved -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
         <div class="stat-pill" style="padding: 0.65rem 0.75rem; border-radius: var(--radius-md); background: rgba(255, 123, 137, 0.06); border: 1px solid rgba(255, 123, 137, 0.22);">
           <span class="stat-pill-label" style="color: var(--coral-alert); font-size: 0.72rem; font-weight: 700; gap: 0.25rem;">
@@ -159,12 +153,9 @@ export function renderDashboard() {
 
   heroCard.appendChild(heroInfo);
   heroCard.appendChild(mascotWidget);
-
   container.appendChild(heroCard);
 
-
-
-  // 8. Recent Transactions
+  // 3. Recent Transactions Card
   const txCard = document.createElement('div');
   txCard.className = 'cloud-card';
   const recentTx = store.getTransactions().slice(0, 5);
@@ -188,8 +179,8 @@ export function renderDashboard() {
                 ${getCategoryIconSvg(t.categoryId || t.categoryName)}
               </div>
               <div>
-                <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main);">${stripEmojis(t.note) || stripEmojis(t.categoryName)}</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">${formatDate(t.date)} &bull; ${stripEmojis(t.categoryName)}</div>
+                <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main);">${escapeHtml(stripEmojis(t.note) || stripEmojis(t.categoryName))}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">${formatDate(t.date)} &bull; ${escapeHtml(stripEmojis(t.categoryName))}</div>
               </div>
             </div>
             <div style="font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: ${

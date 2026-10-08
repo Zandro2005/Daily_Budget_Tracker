@@ -9,5 +9,13 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: ['firebase/app', 'firebase/firestore', 'firebase/auth'],
+          chart: ['chart.js'],
+        },
+      },
+    },
   },
 });

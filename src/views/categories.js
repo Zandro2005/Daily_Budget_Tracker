@@ -4,7 +4,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency } from '../lib/format.js';
+import { formatCurrency, escapeHtml } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { showToast } from '../components/toast.js';
 import { ICONS } from '../lib/icons.js';
@@ -91,7 +91,7 @@ export function renderCategories() {
           ${isOver ? `<div style="position: absolute; top: -2px; right: 8px; background: var(--coral-alert); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.72rem; box-shadow: 0 2px 6px rgba(255,100,100,0.4); border: 2px solid white;">!</div>` : ''}
         </div>
         <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.88rem; color: var(--text-main); line-height: 1.15; word-break: break-word; max-width: 120px; text-align: center; margin-bottom: 0.2rem;">
-          ${cat.name}
+          ${escapeHtml(cat.name)}
         </div>
         <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center;">
           ${cat.monthly_limit > 0 ? `${formatCurrency(cat.remaining, curr)} left` : 'No limit'}
@@ -124,13 +124,13 @@ export function renderCategories() {
     modalBackdrop.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title">${isEdit ? 'Allocate: ' + existingCat.name : 'New Envelope'}</h3>
+          <h3 class="modal-title">${isEdit ? 'Allocate: ' + escapeHtml(existingCat.name) : 'New Envelope'}</h3>
           <button class="modal-close" id="cat-modal-close">&times;</button>
         </div>
         <form id="cat-form">
           <div class="form-group">
             <label class="form-label">Envelope Name</label>
-            <input type="text" id="cat-name-input" class="form-input" required value="${existingCat ? existingCat.name : ''}" placeholder="e.g. Bills, Shopping, Daily...">
+            <input type="text" id="cat-name-input" class="form-input" required value="${existingCat ? escapeHtml(existingCat.name) : ''}" placeholder="e.g. Bills, Shopping, Daily...">
           </div>
 
           <div class="form-group">

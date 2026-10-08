@@ -4,7 +4,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, formatDate, getTodayDateString, parseDate } from '../lib/format.js';
+import { formatCurrency, formatDate, getTodayDateString, parseDate, escapeHtml } from '../lib/format.js';
 import { openQuickAddModal } from './quickAddModal.js';
 import { playPop } from '../lib/audio.js';
 import { showToast } from './toast.js';
@@ -98,20 +98,23 @@ export function renderDayDetail(dateStr = getTodayDateString(), onUpdated = null
                   </div>
                   <div style="min-width: 0;">
                     <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                      ${t.note || t.categoryName}
+                      ${escapeHtml(t.note || t.categoryName)}
                     </div>
                     <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem;">
-                      <span>${t.categoryName}</span>
+                      <span>${escapeHtml(t.categoryName)}</span>
                       ${isBill ? '<span class="pill" style="padding: 0.05rem 0.35rem; font-size: 0.65rem; background: #E6F0FA; color: var(--primary);">Bill ⚡</span>' : ''}
                     </div>
                   </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <div style="display: flex; align-items: center; gap: 0.45rem;">
                   <span style="font-family: var(--font-display); font-weight: 800; font-size: 0.96rem; color: ${t.type === 'income' ? 'var(--mint-deep)' : 'var(--text-main)'};">
                     ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount, curr)}
                   </span>
-                  <button class="icon-btn day-tx-del-btn" data-id="${t.id}" title="Delete" style="width: 26px; height: 26px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">
+                  <button class="icon-btn day-tx-edit-btn" data-id="${t.id}" title="Edit" style="width: 26px; height: 26px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                    ${ICONS.edit}
+                  </button>
+                  <button class="icon-btn day-tx-del-btn" data-id="${t.id}" title="Delete" style="width: 26px; height: 26px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;">
                     ${ICONS.trash}
                   </button>
                 </div>
@@ -126,6 +129,27 @@ export function renderDayDetail(dateStr = getTodayDateString(), onUpdated = null
         ${ICONS.plusCircle} Add Expense for this day
       </button>
     `;
+
+    // Hook edit buttons
+    container.querySelectorAll('.day-tx-edit-btn').forEach(btn => {
+      btn.onclick = () => {
+        playPop();
+        const id = btn.dataset.id;
+        const tx = store.getTransactions().find(t => t.id === id);
+        if (tx) {
+          if (typeof onCloseModal === 'function') {
+            onCloseModal();
+          } else {
+            const parentBackdrop = btn.closest('.modal-backdrop, .day-detail-backdrop');
+            if (parentBackdrop) {
+              parentBackdrop.classList.remove('open');
+              parentBackdrop.remove();
+            }
+          }
+          openQuickAddModal(tx.type, { editTx: tx });
+        }
+      };
+    });
 
     // Hook delete buttons
     container.querySelectorAll('.day-tx-del-btn').forEach(btn => {

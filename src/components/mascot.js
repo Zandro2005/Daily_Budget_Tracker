@@ -61,6 +61,8 @@ export function renderMascot({ mood = 'happy', customQuote = null }) {
   img.className = 'mascot-img';
   img.src = MASCOT_IMAGES[mood] || MASCOT_IMAGES.happy;
   img.alt = `Cloud Puppy mascot (${mood})`;
+  img.decoding = 'async';
+  img.loading = 'lazy';
 
   imgWrap.appendChild(img);
 

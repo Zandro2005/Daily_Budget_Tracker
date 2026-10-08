@@ -4,7 +4,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, formatDate, stripEmojis } from '../lib/format.js';
+import { formatCurrency, formatDate, stripEmojis, escapeHtml } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { openQuickAddModal } from '../components/quickAddModal.js';
 import { showToast } from '../components/toast.js';
@@ -96,8 +96,8 @@ export function renderTransactions() {
           <select id="tx-cat-filter" class="form-select" style="flex: 1.5; min-width: 150px;">
             <option value="all" ${currentFilter.categoryId === 'all' ? 'selected' : ''}>All Categories</option>
             ${categories.map(c => `
-              <option value="${c.id}" ${currentFilter.categoryId === c.id ? 'selected' : ''}>
-                ${c.name}
+              <option value="${escapeHtml(c.id)}" ${currentFilter.categoryId === c.id ? 'selected' : ''}>
+                ${escapeHtml(c.name)}
               </option>
             `).join('')}
           </select>
@@ -174,20 +174,23 @@ export function renderTransactions() {
             </div>
             <div style="min-width: 0;">
               <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${stripEmojis(t.note) || stripEmojis(t.categoryName)}
+                ${escapeHtml(stripEmojis(t.note) || stripEmojis(t.categoryName))}
               </div>
               <div style="font-size: 0.76rem; color: var(--text-muted);">
-                ${formatDate(t.date)} &bull; <span class="pill" style="padding: 0.1rem 0.5rem; font-size: 0.7rem;">${stripEmojis(t.categoryName)}</span>
+                ${formatDate(t.date)} &bull; <span class="pill" style="padding: 0.1rem 0.5rem; font-size: 0.7rem;">${escapeHtml(stripEmojis(t.categoryName))}</span>
               </div>
             </div>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 0.85rem; flex-shrink: 0;">
+          <div style="display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0;">
             <span style="font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; color: ${
               t.type === 'income' ? 'var(--mint-deep)' : 'var(--coral-alert)'
             };">
               ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount, curr)}
             </span>
+            <button class="icon-btn tx-edit-btn" data-id="${t.id}" title="Edit record" style="width: 32px; height: 32px; color: var(--text-muted); display: flex; align-items: center; justify-content: center;">
+              ${ICONS.edit}
+            </button>
             <button class="icon-btn tx-delete-btn" data-id="${t.id}" title="Delete record" style="width: 32px; height: 32px; color: var(--danger); display: flex; align-items: center; justify-content: center;">
               ${ICONS.trash}
             </button>
@@ -198,6 +201,17 @@ export function renderTransactions() {
 
     html += `</div>`;
     listWrapper.innerHTML = html;
+
+    listWrapper.querySelectorAll('.tx-edit-btn').forEach(btn => {
+      btn.onclick = () => {
+        playPop();
+        const id = btn.dataset.id;
+        const tx = store.getTransactions().find(t => t.id === id);
+        if (tx) {
+          openQuickAddModal(tx.type, { editTx: tx });
+        }
+      };
+    });
 
     listWrapper.querySelectorAll('.tx-delete-btn').forEach(btn => {
       btn.onclick = () => {

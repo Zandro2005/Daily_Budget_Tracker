@@ -3,7 +3,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, formatDate, getTodayDateString } from '../lib/format.js';
+import { formatCurrency, formatDate, getTodayDateString, escapeHtml } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { showToast } from '../components/toast.js';
 import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
@@ -104,9 +104,9 @@ export function renderRecurring() {
               ${getCategoryIconSvg(item.categoryId || (category ? category.name : 'bills'))}
             </div>
             <div>
-              <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);">${item.name}</div>
+              <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);">${escapeHtml(item.name)}</div>
               <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">
-                ${isPaid ? 'Next Due' : 'Due'}: <strong>${formatDate(item.nextDue)}</strong> &bull; ${item.frequency}
+                ${isPaid ? 'Next Due' : 'Due'}: <strong>${formatDate(item.nextDue)}</strong> &bull; ${escapeHtml(item.frequency)}
               </div>
             </div>
           </div>
@@ -188,7 +188,7 @@ export function renderRecurring() {
           <div class="form-group">
             <label class="form-label">Category</label>
             <select id="bill-cat" class="form-select">
-              ${categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+              ${categories.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">

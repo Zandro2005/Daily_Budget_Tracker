@@ -11,6 +11,7 @@ import { store } from './lib/store.js';
 import { playPop, playPuppyChirp } from './lib/audio.js';
 import { openQuickAddModal } from './components/quickAddModal.js';
 import { ICONS } from './lib/icons.js';
+import { getSyncStatus, onSyncStatusChange } from './lib/firebase.js';
 
 // Views
 import { renderDashboard } from './views/dashboard.js';
@@ -36,6 +37,19 @@ const ROUTES = {
   '#settings': renderSettings,
 };
 
+function getSyncBadgeHtml(status) {
+  if (status === 'synced') {
+    return `<span class="pill" style="background: rgba(86, 193, 144, 0.15); color: var(--mint-deep); font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Live Cloud Sync Active"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--mint-deep);"></span>Synced</span>`;
+  }
+  if (status === 'syncing') {
+    return `<span class="pill" style="background: rgba(255, 210, 157, 0.25); color: #C67A10; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Syncing with Firebase..."><span style="width: 7px; height: 7px; border-radius: 50%; background: #C67A10;"></span>Syncing</span>`;
+  }
+  if (status === 'error') {
+    return `<span class="pill" style="background: rgba(255, 123, 137, 0.2); color: var(--danger); font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Cloud Sync Warning"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--danger);"></span>Sync alert</span>`;
+  }
+  return `<span class="pill" style="background: var(--sky-100); color: var(--text-muted); font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Local Storage Mode"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted);"></span>Local</span>`;
+}
+
 function initApp() {
   const appRoot = document.getElementById('app');
   if (!appRoot) return;
@@ -59,6 +73,9 @@ function initApp() {
         </a>
 
         <div class="header-controls">
+          <a href="#settings" id="header-sync-badge" style="text-decoration: none; cursor: pointer;">
+            ${getSyncBadgeHtml(getSyncStatus())}
+          </a>
           <button class="icon-btn squish-btn" id="theme-toggle-btn" title="Toggle Day/Night" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;">
             ${store.getSettings().theme === 'night' ? ICONS.moon : ICONS.sun}
           </button>
@@ -107,6 +124,13 @@ function initApp() {
     themeBtn.innerHTML = newTheme === 'night' ? ICONS.moon : ICONS.sun;
   });
 
+  const syncBadgeEl = document.getElementById('header-sync-badge');
+  onSyncStatusChange((newStatus) => {
+    if (syncBadgeEl) {
+      syncBadgeEl.innerHTML = getSyncBadgeHtml(newStatus);
+    }
+  });
+
   const quickAddBtn = document.getElementById('nav-quick-add');
   if (quickAddBtn) {
     quickAddBtn.onclick = (e) => {
@@ -131,7 +155,7 @@ function initApp() {
   });
 
   // Handle Route Changes
-  function handleRoute() {
+  function handleRoute(isNavigation = false) {
     const hash = window.location.hash || '#dashboard';
     const renderFn = ROUTES[hash] || renderDashboard;
 
@@ -146,19 +170,39 @@ function initApp() {
 
     const slot = document.getElementById('main-view-slot');
     if (slot) {
+      const prevScrollY = window.scrollY;
       slot.innerHTML = '';
       slot.appendChild(renderFn());
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (isNavigation) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        window.scrollTo(0, prevScrollY);
+      }
     }
   }
 
-  window.addEventListener('hashchange', handleRoute);
-  handleRoute();
+  window.addEventListener('hashchange', () => handleRoute(true));
+  handleRoute(true);
 
-  // Re-render current view when store updates
+  // Batch re-rendering on store updates with RAF to preserve smoothness
+  let renderRaf = null;
   store.subscribe(() => {
-    handleRoute();
+    if (renderRaf) cancelAnimationFrame(renderRaf);
+    renderRaf = requestAnimationFrame(() => {
+      handleRoute(false);
+    });
   });
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+
+  // Register PWA Service Worker
+  if ('serviceWorker' in navigator && (window.location.protocol.startsWith('http') || window.location.protocol.startsWith('https'))) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('PWA service worker registration note:', err);
+      });
+    });
+  }
+});

@@ -5,11 +5,7 @@
 
 import { store } from '../lib/store.js';
 import { playPop, playCoin, isSoundEnabled, setSoundEnabled } from '../lib/audio.js';
-import {
-  getFirebaseConfig,
-  saveFirebaseConfig,
-  isFirebaseConfigured
-} from '../lib/firebase.js';
+import { isFirebaseConfigured } from '../lib/firebase.js';
 import { showToast } from '../components/toast.js';
 import { ICONS } from '../lib/icons.js';
 
@@ -20,7 +16,6 @@ export function renderSettings() {
   function renderContent() {
     container.innerHTML = '';
     const settings = store.getSettings();
-    const fbConfig = getFirebaseConfig();
     const isCloudConnected = isFirebaseConfigured();
 
     // Header
@@ -149,146 +144,78 @@ export function renderSettings() {
 
     container.appendChild(prefCard);
 
-    // 2. Firebase Database Sync Card
+    // 2. Firebase Database Sync Card (Credentials protected and hidden)
     const dbCard = document.createElement('div');
     dbCard.className = 'cloud-card';
     dbCard.style.marginBottom = '1.5rem';
     dbCard.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
         <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
           ${ICONS.repeat} Firebase Realtime Cloud Sync
         </h3>
-        <span class="pill" style="background: ${isCloudConnected ? 'var(--mint-green)' : 'var(--sky-100)'}; color: var(--navy-800); font-weight: 700;">
-          ${isCloudConnected ? 'Realtime Cloud Sync Active' : 'Offline Local Mode (Ready)'}
+        <span class="pill" style="background: ${isCloudConnected ? 'rgba(86, 193, 144, 0.15)' : 'var(--sky-100)'}; color: ${isCloudConnected ? 'var(--mint-deep)' : 'var(--text-muted)'}; font-weight: 700;">
+          ${isCloudConnected ? '● Realtime Sync Active' : '○ Offline Local Mode'}
         </span>
       </div>
 
-      <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.25rem;">
-        Your budget syncs seamlessly across your phone, laptop, and tablet with <strong>zero login required</strong>!
+      <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.15rem;">
+        Your budget syncs in real-time across your phone, tablet, and computer with zero login required. Private keys and cloud credentials are kept securely in backend configuration and never exposed on-screen.
       </p>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1rem;">
-        <div class="form-group">
-          <label class="form-label">Project ID</label>
-          <input type="text" id="fb-project-id" class="form-input" placeholder="lyka-budget-tracker" value="${fbConfig ? (fbConfig.projectId || '') : ''}">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">API Key</label>
-          <input type="password" id="fb-api-key" class="form-input" placeholder="AIzaSy..." value="${fbConfig ? (fbConfig.apiKey || '') : ''}">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">App ID</label>
-          <input type="text" id="fb-app-id" class="form-input" placeholder="1:123456789:web:abcdef" value="${fbConfig ? (fbConfig.appId || '') : ''}">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Auth Domain (optional)</label>
-          <input type="text" id="fb-auth-domain" class="form-input" placeholder="project-id.firebaseapp.com" value="${fbConfig ? (fbConfig.authDomain || '') : ''}">
-        </div>
-      </div>
-
-      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-        <button class="btn btn-primary squish-btn" id="fb-save-btn">
-          Connect Firebase
-        </button>
-        ${isCloudConnected ? `
-          <button class="btn btn-secondary squish-btn" id="fb-sync-now-btn">
-            Sync Local Data to Cloud
+      ${isCloudConnected ? `
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+          <button class="btn btn-primary squish-btn" id="fb-sync-now-btn">
+            ${ICONS.repeat} Sync Now
           </button>
-          <button class="btn btn-danger squish-btn" id="fb-disconnect-btn">
-            Disconnect
-          </button>
-        ` : ''}
-      </div>
-
-      <div id="fb-status-box" style="margin-top: 1rem; font-size: 0.85rem; font-weight: 700;"></div>
+        </div>
+        <div id="fb-status-box" style="margin-top: 0.85rem; font-size: 0.85rem; font-weight: 700;"></div>
+      ` : `
+        <div style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">
+          Running in offline browser storage.
+        </div>
+      `}
     `;
-
-    dbCard.querySelector('#fb-save-btn').onclick = () => {
-      playPop();
-      const projectId = dbCard.querySelector('#fb-project-id').value.trim();
-      const apiKey = dbCard.querySelector('#fb-api-key').value.trim();
-      const appId = dbCard.querySelector('#fb-app-id').value.trim();
-      const authDomain = dbCard.querySelector('#fb-auth-domain').value.trim() || `${projectId}.firebaseapp.com`;
-      const statusBox = dbCard.querySelector('#fb-status-box');
-
-      if (!projectId || !apiKey) {
-        statusBox.innerHTML = '<span style="color: var(--danger);">Please enter both Project ID and API Key!</span>';
-        return;
-      }
-
-      const config = {
-        projectId,
-        apiKey,
-        appId,
-        authDomain,
-        storageBucket: `${projectId}.appspot.com`,
-      };
-
-      saveFirebaseConfig(config);
-      store.initFirebase();
-      playCoin();
-      showToast({ text: 'Firebase connected! Live sync active.', icon: 'check' });
-      renderContent();
-    };
 
     if (dbCard.querySelector('#fb-sync-now-btn')) {
       dbCard.querySelector('#fb-sync-now-btn').onclick = async () => {
         playPop();
         const statusBox = dbCard.querySelector('#fb-status-box');
-        statusBox.innerHTML = '<span>Syncing local data to Firebase cloud...</span>';
+        if (statusBox) statusBox.innerHTML = '<span>Syncing local data to Firebase cloud...</span>';
         try {
           await store.pushLocalDataToCloud();
           playCoin();
-          statusBox.innerHTML = '<span style="color: var(--mint-deep);">All local budget data synced to Cloud!</span>';
+          if (statusBox) statusBox.innerHTML = '<span style="color: var(--mint-deep);">All local budget data synced to Cloud!</span>';
           showToast({ text: 'Cloud sync complete', icon: 'check' });
         } catch (err) {
-          statusBox.innerHTML = `<span style="color: var(--danger);">Sync error: ${err.message}</span>`;
-        }
-      };
-    }
-
-    if (dbCard.querySelector('#fb-disconnect-btn')) {
-      dbCard.querySelector('#fb-disconnect-btn').onclick = () => {
-        if (confirm('Disconnect from Firebase and use local browser storage only?')) {
-          saveFirebaseConfig(null);
-          location.reload();
+          if (statusBox) statusBox.innerHTML = `<span style="color: var(--danger);">Sync error: ${err.message}</span>`;
         }
       };
     }
 
     container.appendChild(dbCard);
 
-    // 3. Backup, Restore & Reset
+    // 3. Safe Backup & Restore (Destructive Wipe Removed)
     const backupCard = document.createElement('div');
     backupCard.className = 'cloud-card';
     backupCard.innerHTML = `
-      <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem; margin: 0 0 1rem 0;">
+      <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.85rem 0;">
         ${ICONS.folder} Data Backup & Restore
       </h3>
       <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
-        Export your complete data anytime so you always keep your records.
+        Safely download and preserve copies of your budget and transactions anytime.
       </p>
 
-      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
         <button class="btn btn-secondary squish-btn" id="backup-json-btn">
           Download JSON Backup
         </button>
         <button class="btn btn-secondary squish-btn" id="backup-csv-btn">
           Export CSV Sheet
         </button>
-        <label class="btn btn-secondary squish-btn" style="cursor: pointer;">
+        <label class="btn btn-secondary squish-btn" style="cursor: pointer; margin: 0;">
           Import JSON
           <input type="file" id="import-json-input" accept=".json" style="display: none;">
         </label>
-        <button class="btn btn-secondary squish-btn" id="reset-demo-btn">
-          Load Starter Data
-        </button>
-        <button class="btn btn-danger squish-btn" id="clear-all-btn" style="margin-left: auto;">
-          Reset / Clear All Data
-        </button>
       </div>
     `;
 
@@ -310,40 +237,16 @@ export function renderSettings() {
 
       const reader = new FileReader();
       reader.onload = (event) => {
-        const success = store.importJSON(event.target.result);
-        if (success) {
+        const result = store.importJSON(event.target.result);
+        if (result && result.success) {
           playCoin();
-          showToast({ text: 'Data restored successfully', icon: 'check' });
+          showToast({ text: `Data restored! (${result.count} transactions)`, icon: 'check' });
           renderContent();
         } else {
-          showToast({ text: 'Failed to import JSON file' });
+          showToast({ text: `Import failed: ${result?.error || 'Invalid file format'}` });
         }
       };
       reader.readAsText(file);
-    };
-
-    backupCard.querySelector('#reset-demo-btn').onclick = async () => {
-      if (confirm('Reset to clean starter state? This will clear all transactions and reset data.')) {
-        await store.clearAllData();
-        playCoin();
-        showToast({ text: 'All transactions cleared & reset', icon: 'check' });
-        setTimeout(() => {
-          window.location.hash = '#dashboard';
-          window.location.reload();
-        }, 500);
-      }
-    };
-
-    backupCard.querySelector('#clear-all-btn').onclick = async () => {
-      if (confirm('Reset everything? This will delete all transactions, cutoff records, recurring bills, and savings goals from both this device and Firebase cloud.')) {
-        await store.clearAllData();
-        playCoin();
-        showToast({ text: 'All data permanently cleared' });
-        setTimeout(() => {
-          window.location.hash = '#dashboard';
-          window.location.reload();
-        }, 500);
-      }
     };
 
     container.appendChild(backupCard);

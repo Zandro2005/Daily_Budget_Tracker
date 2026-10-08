@@ -16,7 +16,7 @@ import {
   parseDate,
   toDateString,
 } from './format.js';
-import { getDb, isFirebaseConfigured } from './firebase.js';
+import { getDb, isFirebaseConfigured, setSyncStatus } from './firebase.js';
 import {
   collection,
   doc,
@@ -47,7 +47,6 @@ const FS_COLLECTIONS = {
   CUTOFFS: 'cloudy_cutoffs',
 };
 
-localStorage.removeItem(STORAGE_KEYS.CATEGORIES); // Force reset to new defaults for this change
 const DEFAULT_CATEGORIES = [
   { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
   { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
@@ -76,11 +75,28 @@ const DEFAULT_RECURRING = [];
 
 const DEFAULT_GOALS = [];
 
+const FRESH_START_FLAG = 'cloudy_clean_slate_v1';
+
 class BudgetStore {
   constructor() {
     this.listeners = new Set();
     this.unsubscribers = [];
     this.isCloudSyncActive = false;
+    this._notifyPending = false;
+
+    // Fresh start: wipe any legacy local data on first run
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem(FRESH_START_FLAG)) {
+      try {
+        Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+        localStorage.removeItem('lyka_transactions_v2');
+        localStorage.removeItem('lyka_cutoffs_v2');
+        localStorage.removeItem('lyka_recurring_v2');
+        localStorage.removeItem('lyka_goals_v2');
+        localStorage.removeItem('lyka_settings_v2');
+        localStorage.removeItem('lyka_categories_v2');
+        localStorage.setItem(FRESH_START_FLAG, 'true');
+      } catch (_) {}
+    }
 
     // Load initial fast state from localStorage
     this.categories = this.sanitizeCategories(this.load(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES));
@@ -99,15 +115,12 @@ class BudgetStore {
   }
 
   sanitizeCategories(cats) {
-    const legacyKeywords = [
-      'pagkain', 'zandro', 'coffee', 'treats', 'groceries', 'fun & hobbies',
-      'self-care', 'transportation', 'utilities'
-    ];
-    let filtered = (cats || []).filter(c => {
-      if (!c || !c.name) return false;
-      const lower = c.name.toLowerCase();
-      return !legacyKeywords.some(k => lower.includes(k));
-    });
+    if (!Array.isArray(cats)) {
+      return [...DEFAULT_CATEGORIES];
+    }
+
+    // Filter out invalid or unnamed categories, preserving all user-created categories
+    let filtered = cats.filter(c => c && typeof c === 'object' && c.name && String(c.name).trim().length > 0);
 
     const standard = [
       { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
@@ -118,14 +131,9 @@ class BudgetStore {
     ];
 
     standard.forEach(std => {
-      const existing = filtered.find(c => c.id === std.id || c.name.toLowerCase() === std.name.toLowerCase() || (std.id === 'cat-daily' && (c.name.toLowerCase().includes('daily') || c.name.toLowerCase().includes('allowance'))));
+      const existing = filtered.find(c => c.id === std.id || c.name.toLowerCase() === std.name.toLowerCase());
       if (!existing) {
         filtered.push(std);
-      } else {
-        existing.emoji = '';
-        if (existing.id === 'cat-daily') {
-          existing.name = 'Cutoff Allowance';
-        }
       }
     });
 
@@ -156,12 +164,17 @@ class BudgetStore {
   }
 
   notify() {
-    this.listeners.forEach(fn => {
-      try {
-        fn(this);
-      } catch (err) {
-        console.error('Store listener error:', err);
-      }
+    if (this._notifyPending) return;
+    this._notifyPending = true;
+    queueMicrotask(() => {
+      this._notifyPending = false;
+      this.listeners.forEach(fn => {
+        try {
+          fn(this);
+        } catch (err) {
+          console.error('Store listener error:', err);
+        }
+      });
     });
   }
 
@@ -169,11 +182,17 @@ class BudgetStore {
   initFirebase() {
     if (!isFirebaseConfigured()) {
       this.isCloudSyncActive = false;
+      setSyncStatus('offline');
       return;
     }
 
     const db = getDb();
-    if (!db) return;
+    if (!db) {
+      setSyncStatus('offline');
+      return;
+    }
+
+    setSyncStatus('syncing');
 
     // Unsubscribe previous listeners if any
     this.unsubscribers.forEach(unsub => {
@@ -186,33 +205,20 @@ class BudgetStore {
       const unsubCat = onSnapshot(collection(db, FS_COLLECTIONS.CATEGORIES), (snapshot) => {
         if (!snapshot.empty) {
           const remoteCats = [];
-          const legacyIdsToDelete = [];
-          const legacyKeywords = ['pagkain', 'zandro', 'coffee', 'treats', 'groceries', 'fun & hobbies', 'self-care', 'transportation', 'utilities'];
-
-          snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            const lower = (data.name || '').toLowerCase();
-            if (legacyKeywords.some(k => lower.includes(k))) {
-              legacyIdsToDelete.push(docSnap.id);
-            } else {
-              remoteCats.push(data);
-            }
-          });
-
-          if (legacyIdsToDelete.length > 0) {
-            const batch = writeBatch(db);
-            legacyIdsToDelete.forEach(id => batch.delete(doc(db, FS_COLLECTIONS.CATEGORIES, id)));
-            batch.commit().catch(e => console.warn('Legacy category cleanup error:', e));
-          }
+          snapshot.forEach(docSnap => remoteCats.push(docSnap.data()));
 
           this.categories = this.sanitizeCategories(remoteCats);
           this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+          setSyncStatus('synced');
           this.notify();
         } else {
           // If Firestore is empty, seed it with current categories
           this.seedInitialData(db);
         }
-      }, (err) => console.warn('Categories sync error:', err));
+      }, (err) => {
+        console.warn('Categories sync error:', err);
+        setSyncStatus('error');
+      });
       this.unsubscribers.push(unsubCat);
 
       // 2. Transactions Realtime Listener
@@ -223,8 +229,12 @@ class BudgetStore {
         remoteTx.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
         this.transactions = remoteTx;
         this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+        setSyncStatus('synced');
         this.notify();
-      }, (err) => console.warn('Transactions sync error:', err));
+      }, (err) => {
+        console.warn('Transactions sync error:', err);
+        setSyncStatus('error');
+      });
       this.unsubscribers.push(unsubTx);
 
       // 3. Recurring Realtime Listener
@@ -359,6 +369,7 @@ class BudgetStore {
   }
 
   applyTheme(theme) {
+    if (typeof document === 'undefined') return;
     if (theme === 'night') {
       document.documentElement.setAttribute('data-theme', 'night');
     } else {
@@ -481,7 +492,7 @@ class BudgetStore {
       category = this.categories.find(c => c.id === updates.categoryId);
     }
 
-    this.transactions[idx] = {
+    const updated = {
       ...this.transactions[idx],
       ...updates,
       amount: updates.amount !== undefined ? parseFloat(updates.amount) : this.transactions[idx].amount,
@@ -489,8 +500,29 @@ class BudgetStore {
       categoryEmoji: category ? category.emoji : (updates.categoryEmoji || this.transactions[idx].categoryEmoji),
     };
 
-    const updated = this.transactions[idx];
+    if (updates.date && updates.date !== this.transactions[idx].date) {
+      const txDate = new Date(updates.date + (updates.date.includes('T') ? '' : 'T00:00:00'));
+      const cutoff = this.getCurrentCutoff(txDate);
+      if (cutoff) {
+        updated.cutoffId = cutoff.id;
+        updated.cutoffLabel = cutoff.label;
+      }
+    }
+
+    this.transactions[idx] = updated;
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+
+    // If updated transaction was linked as a cutoff salary confirmation, sync the salaryAmount
+    if (updated.type === 'income' && this.cutoffs) {
+      Object.keys(this.cutoffs).forEach(cutoffId => {
+        const rec = this.cutoffs[cutoffId];
+        if (rec && rec.salaryTxId === id) {
+          rec.salaryAmount = updated.amount;
+          this.saveCutoffRecord(rec);
+        }
+      });
+    }
+
     this.notify();
 
     const db = getDb();
@@ -505,8 +537,31 @@ class BudgetStore {
 
   deleteTransaction(id) {
     const deleted = this.transactions.find(t => t.id === id);
+    if (!deleted) return null;
     this.transactions = this.transactions.filter(t => t.id !== id);
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+
+    // If deleted transaction was linked as a cutoff salary confirmation, unconfirm it
+    if (deleted.type === 'income' && this.cutoffs) {
+      Object.keys(this.cutoffs).forEach(cutoffId => {
+        const rec = this.cutoffs[cutoffId];
+        if (rec && rec.salaryTxId === id) {
+          rec.salaryConfirmed = false;
+          delete rec.salaryTxId;
+          delete rec.salaryAmount;
+          this.saveCutoffRecord(rec);
+        }
+      });
+    }
+
+    // If deleted transaction was a paid recurring item, sync with recurring bills
+    if (deleted.recurringId) {
+      const recurringItem = this.recurring.find(r => r.id === deleted.recurringId);
+      if (recurringItem && recurringItem.lastPaid === deleted.date) {
+        this.unmarkRecurringPaid(recurringItem.id);
+      }
+    }
+
     this.notify();
 
     const db = getDb();
@@ -720,7 +775,7 @@ class BudgetStore {
 
   // --- CUTOFF & PERIOD HELPERS ---
   getCurrentCutoff(date = new Date()) {
-    return getCutoffForDate(date, this.settings.paydays || [10, 25]);
+    return getCutoffForDate(date, this.settings.paydays || [10, 25], this.settings.payCycle || 'semi-monthly');
   }
 
   getCutoffRecord(id) {
@@ -1559,31 +1614,72 @@ class BudgetStore {
 
   importJSON(jsonString) {
     try {
+      if (!jsonString || typeof jsonString !== 'string') {
+        throw new Error('Invalid JSON input');
+      }
+
       const data = JSON.parse(jsonString);
-      if (data.categories) this.categories = data.categories;
-      if (data.transactions) this.transactions = data.transactions;
-      if (data.recurring) this.recurring = data.recurring;
-      if (data.goals) this.goals = data.goals;
-      if (data.cutoffs) this.cutoffs = data.cutoffs;
-      if (data.settings) this.settings = data.settings;
+      if (!data || typeof data !== 'object') {
+        throw new Error('Import data must be a JSON object');
+      }
 
-      this.save(STORAGE_KEYS.CATEGORIES, this.categories);
-      this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
-      this.save(STORAGE_KEYS.RECURRING, this.recurring);
-      this.save(STORAGE_KEYS.GOALS, this.goals);
-      this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
-      this.save(STORAGE_KEYS.SETTINGS, this.settings);
+      // Check if file contains at least one recognized key
+      const hasRecognizedKey = ['transactions', 'categories', 'recurring', 'goals', 'cutoffs', 'settings'].some(k => k in data);
+      if (!hasRecognizedKey) {
+        throw new Error('File does not contain valid budget tracker data');
+      }
 
-      this.applyTheme(this.settings.theme);
+      // Create an automatic recovery snapshot before replacing
+      try {
+        const safetyBackup = {
+          backedUpAt: new Date().toISOString(),
+          categories: this.categories,
+          transactions: this.transactions,
+          recurring: this.recurring,
+          goals: this.goals,
+          cutoffs: this.cutoffs,
+          settings: this.settings,
+        };
+        localStorage.setItem('cloudy_pre_import_recovery_backup', JSON.stringify(safetyBackup));
+      } catch (backupErr) {
+        console.warn('Safety backup notice:', backupErr);
+      }
+
+      if (Array.isArray(data.categories)) {
+        this.categories = this.sanitizeCategories(data.categories);
+        this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+      }
+      if (Array.isArray(data.transactions)) {
+        this.transactions = data.transactions.filter(t => t && t.id && t.type);
+        this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+      }
+      if (Array.isArray(data.recurring)) {
+        this.recurring = data.recurring.filter(r => r && r.id);
+        this.save(STORAGE_KEYS.RECURRING, this.recurring);
+      }
+      if (Array.isArray(data.goals)) {
+        this.goals = data.goals.filter(g => g && g.id);
+        this.save(STORAGE_KEYS.GOALS, this.goals);
+      }
+      if (data.cutoffs && typeof data.cutoffs === 'object') {
+        this.cutoffs = data.cutoffs;
+        this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
+      }
+      if (data.settings && typeof data.settings === 'object') {
+        this.settings = { ...this.settings, ...data.settings };
+        this.save(STORAGE_KEYS.SETTINGS, this.settings);
+        this.applyTheme(this.settings.theme);
+      }
+
       this.notify();
 
       if (isFirebaseConfigured()) {
         this.pushLocalDataToCloud().catch(err => console.warn('Cloud import sync error:', err));
       }
-      return true;
+      return { success: true, count: this.transactions.length };
     } catch (e) {
       console.error('Import failed:', e);
-      return false;
+      return { success: false, error: e.message || 'Invalid format' };
     }
   }
 

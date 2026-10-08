@@ -4,7 +4,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, getCurrentMonthKey, formatMonthName } from '../lib/format.js';
+import { formatCurrency, getCurrentMonthKey, formatMonthName, escapeHtml } from '../lib/format.js';
 import Chart from 'chart.js/auto';
 import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
@@ -68,7 +68,7 @@ export function renderInsights() {
       <div class="cloud-card" style="padding: 1.15rem;">
         <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Top Category</span>
         <div style="font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.45rem;">
-          ${highestCat ? `<span style="color: var(--primary); display: flex;">${getCategoryIconSvg(highestCat.id || highestCat.name)}</span> ${highestCat.name}` : 'None yet'}
+          ${highestCat ? `<span style="color: var(--primary); display: flex;">${getCategoryIconSvg(highestCat.id || highestCat.name)}</span> ${escapeHtml(highestCat.name)}` : 'None yet'}
         </div>
         <div style="font-size: 0.82rem; color: var(--coral-alert); font-weight: 700;">
           ${highestCat ? formatCurrency(highestCat.spent, curr) : '₱0'}

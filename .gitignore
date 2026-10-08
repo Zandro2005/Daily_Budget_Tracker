@@ -8,3 +8,11 @@ dist-ssr
 Thumbs.db
 .firebase
 .playwright-mcp
+scratch/
+*.log
+
+# Test snapshots and debug dumps
+*.png
+dashboard_mobile
+modal_open
+log_expense_modal
