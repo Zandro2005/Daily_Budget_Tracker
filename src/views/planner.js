@@ -280,34 +280,31 @@ export function renderPlanner() {
       const statusClass = isOver ? 'status-danger' : percent >= 80 ? 'status-warn' : 'status-safe';
 
       const itemEl = document.createElement('div');
-      itemEl.style.cssText = 'background: var(--bg-card-cloud); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s ease;';
+      itemEl.style.cssText = 'background: var(--bg-card-cloud); padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s ease;';
 
       itemEl.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.4rem;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <div style="width: 36px; height: 36px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+            <div style="display: flex; align-items: center; gap: 0.3rem;">
+              <div style="width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
                 ${getCategoryIconSvg(cat.id || cat.name)}
               </div>
             </div>
             <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;">
-              <div style="color: var(--text-muted); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
-                ${ICONS.settings}
-              </div>
-              <span class="pill" style="font-size: 0.68rem; padding: 0.2rem 0.45rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--danger)' : 'var(--text-main)'}; font-weight: 700;">
+              <span class="pill" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--danger)' : 'var(--text-main)'}; font-weight: 700;">
                 ${limit > 0 ? (isOver ? `+${formatCurrency(cat.spent - limit, curr)}` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)}`) : 'No Limit'}
               </span>
             </div>
           </div>
           <div>
-            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); line-height: 1.1; margin-bottom: 0.2rem;">${cat.name}</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted);">
+            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main); line-height: 1.1; margin-bottom: 0.15rem;">${cat.name}</div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">
               Spent: <strong style="color: var(--text-main);">${formatCurrency(cat.spent, curr)}</strong>
             </div>
           </div>
         </div>
 
-        <div class="cloud-progress" style="height: 8px;">
+        <div class="cloud-progress" style="height: 6px;">
           <div class="cloud-progress-fill ${statusClass}" style="width: ${percent}%;"></div>
         </div>
       `;
