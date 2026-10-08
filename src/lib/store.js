@@ -214,6 +214,8 @@ class BudgetStore {
         } else {
           // If Firestore is empty, seed it with current categories
           this.seedInitialData(db);
+          setSyncStatus('synced');
+          this.notify();
         }
       }, (err) => {
         console.warn('Categories sync error:', err);
