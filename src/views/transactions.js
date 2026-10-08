@@ -4,7 +4,7 @@
 // ====================================================================
 
 import { store } from '../lib/store.js';
-import { formatCurrency, formatDate } from '../lib/format.js';
+import { formatCurrency, formatDate, stripEmojis } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
 import { openQuickAddModal } from '../components/quickAddModal.js';
 import { showToast } from '../components/toast.js';
@@ -30,7 +30,7 @@ export function renderTransactions() {
 
     // Header & Actions
     const topBar = document.createElement('div');
-    topBar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.15rem;';
+    topBar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.15rem; flex-wrap: wrap; gap: 0.5rem;';
     topBar.innerHTML = `
       <div>
         <h2 style="font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
@@ -40,11 +40,27 @@ export function renderTransactions() {
           All your logged expenses and income records
         </p>
       </div>
-      <button class="pill squish-btn" id="export-csv-btn" style="cursor: pointer; border: none; padding: 0.45rem 0.85rem; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
-        ${ICONS.download} Export CSV
-      </button>
+      <div style="display: flex; align-items: center; gap: 0.4rem;">
+        <button class="pill squish-btn" id="tx-add-expense" style="cursor: pointer; border: none; padding: 0.45rem 0.75rem; font-size: 0.76rem; background: var(--coral-soft); color: var(--coral-deep); font-weight: 700;">
+          + Expense
+        </button>
+        <button class="pill squish-btn" id="tx-add-income" style="cursor: pointer; border: none; padding: 0.45rem 0.75rem; font-size: 0.76rem; background: var(--mint-soft); color: var(--mint-deep); font-weight: 700;">
+          + Income
+        </button>
+        <button class="pill squish-btn" id="export-csv-btn" style="cursor: pointer; border: none; padding: 0.45rem 0.75rem; font-size: 0.76rem; display: flex; align-items: center; gap: 0.35rem;">
+          ${ICONS.download} CSV
+        </button>
+      </div>
     `;
 
+    topBar.querySelector('#tx-add-expense').onclick = () => {
+      playPop();
+      openQuickAddModal('expense');
+    };
+    topBar.querySelector('#tx-add-income').onclick = () => {
+      playPop();
+      openQuickAddModal('income');
+    };
     topBar.querySelector('#export-csv-btn').onclick = () => {
       playPop();
       store.exportCSV();
@@ -158,10 +174,10 @@ export function renderTransactions() {
             </div>
             <div style="min-width: 0;">
               <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${t.note || t.categoryName}
+                ${stripEmojis(t.note) || stripEmojis(t.categoryName)}
               </div>
               <div style="font-size: 0.76rem; color: var(--text-muted);">
-                ${formatDate(t.date)} &bull; <span class="pill" style="padding: 0.1rem 0.5rem; font-size: 0.7rem;">${t.categoryName}</span>
+                ${formatDate(t.date)} &bull; <span class="pill" style="padding: 0.1rem 0.5rem; font-size: 0.7rem;">${stripEmojis(t.categoryName)}</span>
               </div>
             </div>
           </div>

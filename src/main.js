@@ -20,6 +20,7 @@ import { renderCategories } from './views/categories.js';
 import { renderRecurring } from './views/recurring.js';
 import { renderGoals } from './views/goals.js';
 import { renderInsights } from './views/insights.js';
+import { renderCalendar } from './views/calendar.js';
 import { renderSettings } from './views/settings.js';
 
 const ROUTES = {
@@ -27,6 +28,7 @@ const ROUTES = {
   '#dashboard': renderDashboard,
   '#planner': renderPlanner,
   '#transactions': renderTransactions,
+  '#calendar': renderCalendar,
   '#categories': renderCategories,
   '#bills': renderRecurring,
   '#goals': renderGoals,
@@ -89,9 +91,9 @@ function initApp() {
           ${ICONS.history}
           <span>History</span>
         </button>
-        <button class="nav-link" data-route="#settings" title="Settings">
-          ${ICONS.settings}
-          <span>Settings</span>
+        <button class="nav-link" data-route="#calendar" title="Calendar">
+          ${ICONS.calendarDays}
+          <span>Calendar</span>
         </button>
       </nav>
     </div>

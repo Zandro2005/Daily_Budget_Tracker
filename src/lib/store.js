@@ -4,7 +4,18 @@
 // Designed for seamless multi-device live updates with zero-login
 // ====================================================================
 
-import { getTodayDateString, getCurrentMonthKey } from './format.js';
+import {
+  getTodayDateString,
+  getCurrentMonthKey,
+  getCutoffForDate,
+  getPreviousCutoff,
+  getNextCutoff,
+  isDateInRange,
+  formatShortRange,
+  formatCurrency,
+  parseDate,
+  toDateString,
+} from './format.js';
 import { getDb, isFirebaseConfigured } from './firebase.js';
 import {
   collection,
@@ -23,6 +34,7 @@ const STORAGE_KEYS = {
   RECURRING: 'cloudy_recurring_v1',
   GOALS: 'cloudy_goals_v1',
   SETTINGS: 'cloudy_settings_v1',
+  CUTOFFS: 'cloudy_cutoffs_v1',
   FIREBASE_INITIALIZED: 'cloudy_fb_seeded_v1',
 };
 
@@ -32,123 +44,39 @@ const FS_COLLECTIONS = {
   RECURRING: 'cloudy_recurring',
   GOALS: 'cloudy_goals',
   SETTINGS: 'cloudy_settings',
+  CUTOFFS: 'cloudy_cutoffs',
 };
 
 const DEFAULT_CATEGORIES = [
-  { id: 'cat-food', name: 'Food & Groceries', emoji: '🍱', color: '#FFD1DC', monthly_limit: 8000 },
-  { id: 'cat-coffee', name: 'Coffee & Treats', emoji: '🧋', color: '#FFE5B4', monthly_limit: 2500 },
-  { id: 'cat-transit', name: 'Transportation', emoji: '🚌', color: '#BFE3F7', monthly_limit: 3000 },
-  { id: 'cat-bills', name: 'Bills & Utilities', emoji: '⚡', color: '#C8E6C9', monthly_limit: 6000 },
-  { id: 'cat-shop', name: 'Shopping & Needs', emoji: '🛍️', color: '#E1BEE7', monthly_limit: 3500 },
-  { id: 'cat-care', name: 'Self-Care & Health', emoji: '🌸', color: '#FFCDD2', monthly_limit: 2000 },
-  { id: 'cat-fun', name: 'Fun & Hobbies', emoji: '🎮', color: '#FFF9C4', monthly_limit: 2000 },
+  { id: 'cat-food', name: 'Food & Groceries', emoji: '🍱', color: '#FFD1DC', monthly_limit: 0 },
+  { id: 'cat-coffee', name: 'Coffee & Treats', emoji: '🧋', color: '#FFE5B4', monthly_limit: 0 },
+  { id: 'cat-transit', name: 'Transportation', emoji: '🚌', color: '#BFE3F7', monthly_limit: 0 },
+  { id: 'cat-bills', name: 'Bills & Utilities', emoji: '⚡', color: '#C8E6C9', monthly_limit: 0 },
+  { id: 'cat-shop', name: 'Shopping & Needs', emoji: '🛍️', color: '#E1BEE7', monthly_limit: 0 },
+  { id: 'cat-care', name: 'Self-Care & Health', emoji: '🌸', color: '#FFCDD2', monthly_limit: 0 },
+  { id: 'cat-fun', name: 'Fun & Hobbies', emoji: '🎮', color: '#FFF9C4', monthly_limit: 0 },
   { id: 'cat-income', name: 'Salary & Income', emoji: '💼', color: '#B2DFDB', monthly_limit: 0 },
 ];
 
 const DEFAULT_SETTINGS = {
   currency: '₱',
-  monthlyBudget: 25000,
-  expectedIncome: 35000,
+  monthlyBudget: 0,
+  expectedIncome: 0,
+  savingsRate: 0.20, // default 20% savings rule when planning
+  payCycle: 'semi-monthly', // 'semi-monthly' | 'monthly'
+  paydays: [10, 25],
+  salaryByPayday: { 10: 0, 25: 0 },
   theme: 'day', // 'day' | 'night'
   soundEnabled: true,
 };
 
 function getSampleTransactions() {
-  const today = getTodayDateString();
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-  const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0];
-
-  return [
-    {
-      id: 'tx-1',
-      type: 'income',
-      amount: 35000,
-      categoryId: 'cat-income',
-      categoryName: 'Salary & Income',
-      categoryEmoji: '💼',
-      note: 'Monthly Salary ☁️',
-      date: threeDaysAgo,
-      createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-    },
-    {
-      id: 'tx-2',
-      type: 'expense',
-      amount: 1450,
-      categoryId: 'cat-food',
-      categoryName: 'Food & Groceries',
-      categoryEmoji: '🍱',
-      note: 'Weekly Grocery haul',
-      date: yesterday,
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-    {
-      id: 'tx-3',
-      type: 'expense',
-      amount: 185,
-      categoryId: 'cat-coffee',
-      categoryName: 'Coffee & Treats',
-      categoryEmoji: '🧋',
-      note: 'Iced Matcha Oat Latte',
-      date: today,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'tx-4',
-      type: 'expense',
-      amount: 160,
-      categoryId: 'cat-transit',
-      categoryName: 'Transportation',
-      categoryEmoji: '🚌',
-      note: 'Commute reload',
-      date: today,
-      createdAt: new Date().toISOString(),
-    },
-  ];
+  return [];
 }
 
-const DEFAULT_RECURRING = [
-  {
-    id: 'rec-1',
-    name: 'Home Fiber Internet',
-    amount: 1699,
-    categoryId: 'cat-bills',
-    frequency: 'monthly',
-    dueDay: 15,
-    nextDue: getTodayDateString().slice(0, 8) + '15',
-    isActive: true,
-  },
-  {
-    id: 'rec-2',
-    name: 'Music & Cloud Storage',
-    amount: 249,
-    categoryId: 'cat-fun',
-    frequency: 'monthly',
-    dueDay: 20,
-    nextDue: getTodayDateString().slice(0, 8) + '20',
-    isActive: true,
-  },
-];
+const DEFAULT_RECURRING = [];
 
-const DEFAULT_GOALS = [
-  {
-    id: 'goal-1',
-    name: 'Tokyo Dream Vacation 🌸',
-    targetAmount: 50000,
-    currentAmount: 24500,
-    emoji: '✈️',
-    deadline: '2026-12-25',
-    isCompleted: false,
-  },
-  {
-    id: 'goal-2',
-    name: 'Fluffy Emergency Fund 🛡️',
-    targetAmount: 30000,
-    currentAmount: 18000,
-    emoji: '☁️',
-    deadline: '2026-11-30',
-    isCompleted: false,
-  },
-];
+const DEFAULT_GOALS = [];
 
 class BudgetStore {
   constructor() {
@@ -162,6 +90,7 @@ class BudgetStore {
     this.recurring = this.load(STORAGE_KEYS.RECURRING, []);
     this.goals = this.load(STORAGE_KEYS.GOALS, []);
     this.settings = this.load(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    this.cutoffs = this.load(STORAGE_KEYS.CUTOFFS, {});
 
     // Apply stored theme on init
     this.applyTheme(this.settings.theme);
@@ -267,7 +196,19 @@ class BudgetStore {
       }, (err) => console.warn('Goals sync error:', err));
       this.unsubscribers.push(unsubGoals);
 
-      // 5. Settings Realtime Listener
+      // 5. Cutoffs Realtime Listener
+      const unsubCutoffs = onSnapshot(collection(db, FS_COLLECTIONS.CUTOFFS), (snapshot) => {
+        const remoteCutoffs = {};
+        snapshot.forEach(docSnap => {
+          remoteCutoffs[docSnap.id] = docSnap.data();
+        });
+        this.cutoffs = remoteCutoffs;
+        this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
+        this.notify();
+      }, (err) => console.warn('Cutoffs sync error:', err));
+      this.unsubscribers.push(unsubCutoffs);
+
+      // 6. Settings Realtime Listener
       const unsubSettings = onSnapshot(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), (docSnap) => {
         if (docSnap.exists()) {
           const remoteSettings = docSnap.data();
@@ -300,8 +241,12 @@ class BudgetStore {
       });
       batch.set(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), {
         currency: this.settings.currency || '₱',
-        monthlyBudget: this.settings.monthlyBudget || 25000,
-        expectedIncome: this.settings.expectedIncome || 35000,
+        monthlyBudget: parseFloat(this.settings.monthlyBudget) || 0,
+        expectedIncome: parseFloat(this.settings.expectedIncome) || 0,
+        savingsRate: this.settings.savingsRate ?? 0.20,
+        payCycle: this.settings.payCycle || 'semi-monthly',
+        paydays: this.settings.paydays || [10, 25],
+        salaryByPayday: this.settings.salaryByPayday || { 10: 0, 25: 0 },
         soundEnabled: this.settings.soundEnabled ?? true,
       });
 
@@ -322,10 +267,15 @@ class BudgetStore {
     this.transactions.forEach(t => batch.set(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t));
     this.recurring.forEach(r => batch.set(doc(db, FS_COLLECTIONS.RECURRING, r.id), r));
     this.goals.forEach(g => batch.set(doc(db, FS_COLLECTIONS.GOALS, g.id), g));
+    Object.values(this.cutoffs || {}).forEach(c => batch.set(doc(db, FS_COLLECTIONS.CUTOFFS, c.id), c));
     batch.set(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), {
       currency: this.settings.currency,
       monthlyBudget: this.settings.monthlyBudget,
       expectedIncome: this.settings.expectedIncome,
+      savingsRate: this.settings.savingsRate ?? 0.2857,
+      payCycle: this.settings.payCycle,
+      paydays: this.settings.paydays,
+      salaryByPayday: this.settings.salaryByPayday,
       soundEnabled: this.settings.soundEnabled,
     });
 
@@ -398,20 +348,67 @@ class BudgetStore {
 
   addTransaction(tx) {
     const category = this.categories.find(c => c.id === tx.categoryId);
+    const isIncome = tx.type === 'income' || tx.categoryId === 'cat-income' || (category && category.name.toLowerCase().includes('income'));
     const newTx = {
       id: tx.id || ('tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
-      type: tx.type || 'expense',
-      amount: parseFloat(tx.amount),
+      type: isIncome ? 'income' : 'expense',
+      amount: parseFloat(tx.amount) || 0,
       categoryId: tx.categoryId,
-      categoryName: category ? category.name : (tx.categoryName || 'General'),
-      categoryEmoji: category ? category.emoji : (tx.categoryEmoji || '🏷️'),
+      categoryName: category ? category.name : (tx.categoryName || (isIncome ? 'Salary & Income' : 'General')),
+      categoryEmoji: category ? category.emoji : (tx.categoryEmoji || ''),
       note: tx.note ? tx.note.trim() : '',
       date: tx.date || getTodayDateString(),
+      recurringId: tx.recurringId || null,
       createdAt: tx.createdAt || new Date().toISOString(),
     };
 
+    // Calculate cutoff that this transaction belongs to
+    const txDate = new Date(newTx.date + (newTx.date.includes('T') ? '' : 'T00:00:00'));
+    const cutoff = this.getCurrentCutoff(txDate);
+    if (cutoff) {
+      newTx.cutoffId = cutoff.id;
+      newTx.cutoffLabel = cutoff.label;
+    }
+
+    // Safeguard: User must NOT log expenses when income is insufficient!
+    // Savings must NEVER be compromised: only the spend budget is deducted by expenses.
+    if (newTx.type === 'expense' && !tx.skipBudgetCheck) {
+      const summary = this.getCutoffSummary(cutoff);
+      const curr = this.settings.currency || '₱';
+
+      if (summary.budgetLimit <= 0) {
+        throw new Error(`Cannot log expense: No spend budget logged yet for cutoff ${cutoff.label}. Please log your income first.`);
+      }
+
+      if (newTx.amount > summary.remainingBudget) {
+        throw new Error(`Insufficient budget! You only have ${formatCurrency(summary.remainingBudget, curr)} available to spend in this cutoff (${cutoff.label}). Savings of ${formatCurrency(summary.plan.savingsTarget, curr)} is strictly protected and cannot be compromised.`);
+      }
+    }
+
     this.transactions.unshift(newTx);
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+
+    if (newTx.type === 'income') {
+      try {
+        if (cutoff) {
+          const rec = this.getCutoffRecord(cutoff.id) || {};
+          if (!rec.salaryConfirmed) {
+            this.saveCutoffRecord({
+              ...rec,
+              id: cutoff.id,
+              salaryConfirmed: true,
+              salaryTxId: newTx.id,
+              salaryAmount: newTx.amount,
+              carriedIn: parseFloat(rec.carriedIn) || 0,
+              confirmedAt: new Date().toISOString(),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Auto cutoff record update notice:', e);
+      }
+    }
+
     this.notify();
 
     const db = getDb();
@@ -550,8 +547,572 @@ class BudgetStore {
     }
   }
 
+  // --- SAVINGS & PLANNING HELPERS ---
+  getSavingsRate() {
+    if (this.settings.savingsRate !== undefined && this.settings.savingsRate !== null) {
+      const rate = parseFloat(this.settings.savingsRate);
+      if (!isNaN(rate)) {
+        return Math.max(0, Math.min(0.95, rate));
+      }
+    }
+    const expected = parseFloat(this.settings.expectedIncome) || 0;
+    const budget = parseFloat(this.settings.monthlyBudget) || 0;
+    if (expected > 0 && budget > 0) {
+      const computed = (expected - budget) / expected;
+      return Math.max(0, Math.min(0.95, computed));
+    }
+    return 0.20;
+  }
+
+  getCutoffPlan(cutoff = this.getCurrentCutoff()) {
+    const isSemi = (this.settings.payCycle || 'semi-monthly') === 'semi-monthly';
+    const periodTx = this.transactions.filter(
+      t => t.date && isDateInRange(t.date, cutoff.start, cutoff.end)
+    );
+
+    const loggedIncome = periodTx
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const record = this.getCutoffRecord(cutoff.id);
+    const expectedSalary = (record && record.expectedSalary !== undefined)
+      ? parseFloat(record.expectedSalary)
+      : (isSemi
+          ? ((this.settings.salaryByPayday && this.settings.salaryByPayday[cutoff.payday] !== undefined)
+              ? parseFloat(this.settings.salaryByPayday[cutoff.payday])
+              : (Math.round((parseFloat(this.settings.expectedIncome) || 0) / 2)))
+          : (parseFloat(this.settings.expectedIncome) || 0));
+
+    const isExpected = loggedIncome <= 0;
+    const paycheck = isExpected ? expectedSalary : loggedIncome;
+
+    const savingsRate = (record && record.savingsRate !== undefined) ? record.savingsRate : this.getSavingsRate();
+    const savingsTarget = Math.round(paycheck * savingsRate);
+
+    const carriedIn = record ? (parseFloat(record.carriedIn) || 0) : 0;
+
+    let spendBudget = Math.max(0, paycheck - savingsTarget + carriedIn);
+    // Only use customSpendBudget if expected salary mode and custom limit was explicitly saved
+    if (isExpected && record && record.customSpendBudget !== undefined) {
+      spendBudget = Math.max(0, parseFloat(record.customSpendBudget) + carriedIn);
+    }
+
+    return {
+      cutoff,
+      paycheck,
+      loggedIncome,
+      expectedSalary,
+      isExpected,
+      savingsRate,
+      savingsTarget,
+      carriedIn,
+      spendBudget,
+      record,
+    };
+  }
+
+  getMonthPlan(yearMonth = getCurrentMonthKey()) {
+    const monthTx = this.transactions.filter(
+      t => t.date && t.date.startsWith(yearMonth)
+    );
+    const loggedIncome = monthTx
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const expectedIncome = parseFloat(this.settings.expectedIncome) || 0;
+    const isExpected = loggedIncome <= 0;
+    const paycheck = isExpected ? expectedIncome : loggedIncome;
+    const savingsRate = this.getSavingsRate();
+    const savingsTarget = Math.round(paycheck * savingsRate);
+    const spendBudget = Math.max(0, paycheck - savingsTarget);
+    return {
+      yearMonth,
+      paycheck,
+      loggedIncome,
+      expectedIncome,
+      isExpected,
+      savingsRate,
+      savingsTarget,
+      spendBudget,
+    };
+  }
+
+  // --- CUTOFF & PERIOD HELPERS ---
+  getCurrentCutoff(date = new Date()) {
+    return getCutoffForDate(date, this.settings.paydays || [10, 25]);
+  }
+
+  getCutoffRecord(id) {
+    return (this.cutoffs && this.cutoffs[id]) || null;
+  }
+
+  saveCutoffRecord(record) {
+    if (!this.cutoffs) this.cutoffs = {};
+    this.cutoffs[record.id] = record;
+    this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
+    this.notify();
+
+    const db = getDb();
+    if (db) {
+      setDoc(doc(db, FS_COLLECTIONS.CUTOFFS, record.id), record).catch(err => {
+        console.warn('Firestore cutoff update error:', err);
+      });
+    }
+    return record;
+  }
+
+  getCutoffSummary(cutoff = this.getCurrentCutoff()) {
+    const plan = this.getCutoffPlan(cutoff);
+    const periodTx = this.transactions.filter(
+      t => t.date && isDateInRange(t.date, cutoff.start, cutoff.end)
+    );
+
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let billsTotal = 0;
+
+    periodTx.forEach(t => {
+      const amt = parseFloat(t.amount) || 0;
+      if (t.type === 'income') {
+        totalIncome += amt;
+      } else if (t.type === 'expense') {
+        totalExpense += amt;
+        const isBill = !!t.recurringId || t.categoryId === 'cat-bills' || (t.note && t.note.startsWith('Paid recurring:'));
+        if (isBill) {
+          billsTotal += amt;
+        }
+      }
+    });
+
+    const budgetLimit = plan.spendBudget;
+    const remainingBudget = Math.max(0, budgetLimit - totalExpense);
+    const usagePercent = budgetLimit > 0 ? (totalExpense / budgetLimit) * 100 : 0;
+    const isTight = budgetLimit > 0 && remainingBudget > 0 && (remainingBudget <= budgetLimit * 0.20 || usagePercent >= 80);
+    const isExhausted = budgetLimit > 0 && remainingBudget <= 0;
+
+    return {
+      cutoff,
+      record: plan.record,
+      plan,
+      totalIncome,
+      totalExpense,
+      billsTotal,
+      dailyExpense: Math.max(0, totalExpense - billsTotal),
+      carriedIn: plan.carriedIn,
+      baseBudget: plan.paycheck - plan.savingsTarget,
+      budgetLimit,
+      remainingBudget,
+      usagePercent,
+      isTight,
+      isExhausted,
+      mood: usagePercent > 100 ? 'sad' : usagePercent >= 70 ? 'worried' : 'happy',
+    };
+  }
+
+  getCutoffCategorySpending(cutoff = this.getCurrentCutoff()) {
+    const isSemi = (this.settings.payCycle || 'semi-monthly') === 'semi-monthly';
+    const plan = this.getCutoffPlan(cutoff);
+    const periodExpenses = this.transactions.filter(
+      t => t.type === 'expense' && t.date && isDateInRange(t.date, cutoff.start, cutoff.end)
+    );
+
+    const spendMap = {};
+    periodExpenses.forEach(t => {
+      const catId = t.categoryId || 'cat-general';
+      if (!spendMap[catId]) {
+        spendMap[catId] = {
+          categoryId: catId,
+          name: t.categoryName || 'General',
+          emoji: t.categoryEmoji || '🏷️',
+          total: 0,
+          billsTotal: 0,
+        };
+      }
+      spendMap[catId].total += t.amount;
+      const isBill = !!t.recurringId || t.categoryId === 'cat-bills' || (t.note && t.note.startsWith('Paid recurring:'));
+      if (isBill) {
+        spendMap[catId].billsTotal += t.amount;
+      }
+    });
+
+    const nominalSum = this.categories.reduce((acc, c) => acc + ((c.monthly_limit || 0) / 2), 0);
+
+    return this.categories
+      .filter(c => c.monthly_limit > 0 || spendMap[c.id])
+      .map(cat => {
+        const spent = spendMap[cat.id] ? spendMap[cat.id].total : 0;
+        const billsSpent = spendMap[cat.id] ? spendMap[cat.id].billsTotal : 0;
+        const monthlyLimit = cat.monthly_limit || 0;
+        const nominalHalf = isSemi ? Math.round(monthlyLimit / 2) : monthlyLimit;
+
+        // Specific cutoff limit takes precedence if set, otherwise scale proportionally
+        let limit = nominalHalf;
+        if (plan.record && plan.record.categoryLimits && plan.record.categoryLimits[cat.id] !== undefined) {
+          limit = parseFloat(plan.record.categoryLimits[cat.id]) || 0;
+        } else if (isSemi && nominalSum > 0 && monthlyLimit > 0) {
+          const ratio = (monthlyLimit / 2) / nominalSum;
+          limit = Math.round(plan.spendBudget * ratio);
+        } else if (!isSemi && this.settings.monthlyBudget > 0 && monthlyLimit > 0) {
+          const ratio = monthlyLimit / (this.settings.monthlyBudget || 1);
+          limit = Math.round(plan.spendBudget * ratio);
+        }
+
+        const percent = limit > 0 ? (spent / limit) * 100 : 0;
+        return {
+          ...cat,
+          monthly_limit: monthlyLimit,
+          period_limit: limit,
+          spent,
+          billsSpent,
+          dailySpent: Math.max(0, spent - billsSpent),
+          percent,
+          remaining: Math.max(0, limit - spent),
+          isExceeded: limit > 0 && spent > limit,
+        };
+      })
+      .sort((a, b) => b.spent - a.spent);
+  }
+
+  updateCutoffCategoryLimit(cutoffId, catId, limit) {
+    const record = this.getCutoffRecord(cutoffId) || { id: cutoffId };
+    if (!record.categoryLimits) record.categoryLimits = {};
+    const cutoffLimit = Math.max(0, parseFloat(limit) || 0);
+    record.categoryLimits[catId] = cutoffLimit;
+    this.saveCutoffRecord(record);
+
+    // Keep baseline category monthly limit aligned
+    const idx = this.categories.findIndex(c => c.id === catId);
+    if (idx !== -1) {
+      this.categories[idx].monthly_limit = cutoffLimit * 2;
+      this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+    }
+
+    this.notify();
+  }
+
+  applyCutoff503020Rule(cutoffId, paycheckVal) {
+    const curCutoff = this.getCurrentCutoff();
+    const cutoff = (this.cutoffs && this.cutoffs[cutoffId]) || curCutoff;
+    const plan = this.getCutoffPlan(cutoff);
+    const paycheck = parseFloat(paycheckVal) || plan.paycheck;
+
+    const needs = paycheck * 0.50; // 50%
+    const wants = paycheck * 0.30; // 30%
+    const spendBudget = Math.round(needs + wants);
+
+    const record = this.getCutoffRecord(cutoffId) || { id: cutoffId };
+    record.categoryLimits = {
+      'cat-food': Math.round(needs * 0.50),
+      'cat-bills': Math.round(needs * 0.30),
+      'cat-transit': Math.round(needs * 0.20),
+      'cat-shop': Math.round(wants * 0.40),
+      'cat-coffee': Math.round(wants * 0.25),
+      'cat-fun': Math.round(wants * 0.20),
+      'cat-care': Math.round(wants * 0.15),
+    };
+    record.savingsRate = 0.20;
+    record.customSpendBudget = spendBudget;
+    this.saveCutoffRecord(record);
+
+    // Align categories baseline
+    Object.entries(record.categoryLimits).forEach(([catId, cLimit]) => {
+      const idx = this.categories.findIndex(c => c.id === catId);
+      if (idx !== -1) {
+        this.categories[idx].monthly_limit = cLimit * 2;
+      }
+    });
+    this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+
+    this.notify();
+  }
+
+  getPendingPayday() {
+    if ((this.settings.payCycle || 'semi-monthly') !== 'semi-monthly') return null;
+    const curCutoff = this.getCurrentCutoff();
+    const record = this.getCutoffRecord(curCutoff.id);
+    const plan = this.getCutoffPlan(curCutoff);
+    const hasLoggedIncome = plan.loggedIncome > 0;
+
+    const todayDate = new Date();
+    const dayNum = todayDate.getDate();
+    const paydays = this.settings.paydays || [10, 25];
+    const isPayday = paydays.includes(dayNum);
+
+    // If income has already been logged (>0) and confirmed with a positive salary:
+    const isSalaryConfirmed = Boolean(
+      record &&
+      record.salaryConfirmed &&
+      (parseFloat(record.salaryAmount) > 0 || hasLoggedIncome)
+    );
+
+    // 1. When income is 0 / not logged yet (!hasLoggedIncome), the paycheck modal
+    // MUST appear so the user can log their cutoff income (even when cleared).
+    // 2. When today is payday (10 or 25), the modal MUST appear.
+    // 3. Only hide modal if today is NOT payday AND income has already been logged and confirmed.
+    if (!isPayday && hasLoggedIncome && isSalaryConfirmed) {
+      return null;
+    }
+
+    // If today is payday and user already confirmed TODAY's payday:
+    if (isPayday && isSalaryConfirmed && record && record.confirmedAt) {
+      const confirmedDate = record.confirmedAt.slice(0, 10);
+      const todayStr = getTodayDateString();
+      if (confirmedDate === todayStr) {
+        return null;
+      }
+    }
+
+    const prevCutoff = getPreviousCutoff(curCutoff, paydays);
+    const prevSummary = this.getCutoffSummary(prevCutoff);
+    const leftover = Math.max(
+      0,
+      prevSummary.remainingBudget || 0,
+      (prevSummary.totalIncome - prevSummary.totalExpense) || 0
+    );
+
+    const scheduledSalary = (this.settings.salaryByPayday && this.settings.salaryByPayday[curCutoff.payday] !== undefined)
+      ? parseFloat(this.settings.salaryByPayday[curCutoff.payday])
+      : Math.round((parseFloat(this.settings.expectedIncome) || 0) / 2);
+
+    return {
+      cutoff: curCutoff,
+      salary: scheduledSalary > 0 ? scheduledSalary : (plan.loggedIncome || 0),
+      isPayday,
+      hasLoggedIncome,
+      previous: {
+        cutoff: prevCutoff,
+        leftover,
+      },
+    };
+  }
+
+  confirmPayday({ amount, leftoverAction = 'save', goalId, note } = {}) {
+    const curCutoff = this.getCurrentCutoff();
+    const defaultSalary = (this.settings.salaryByPayday && this.settings.salaryByPayday[curCutoff.payday] !== undefined)
+      ? parseFloat(this.settings.salaryByPayday[curCutoff.payday])
+      : Math.round((parseFloat(this.settings.expectedIncome) || 0) / 2);
+    const amountVal = parseFloat(amount) || defaultSalary || 0;
+
+    // 1. Log Income if amount > 0
+    let tx = null;
+    if (amountVal > 0) {
+      tx = this.addTransaction({
+        type: 'income',
+        amount: amountVal,
+        categoryId: 'cat-income',
+        categoryName: 'Salary & Income',
+        categoryEmoji: '',
+        note: note || `Salary – ${curCutoff.label} (${curCutoff.payday}th Cutoff)`,
+        date: getTodayDateString(),
+      });
+    }
+
+    // 2. Handle leftover from previous cutoff (defaults to 'save' so remaining money goes to savings)
+    const paydays = this.settings.paydays || [10, 25];
+    const prevCutoff = getPreviousCutoff(curCutoff, paydays);
+    const prevSummary = this.getCutoffSummary(prevCutoff);
+    const leftoverAmount = Math.max(
+      0,
+      prevSummary.remainingBudget || 0,
+      (prevSummary.totalIncome - prevSummary.totalExpense) || 0
+    );
+
+    const action = leftoverAction || 'save';
+    let carriedIn = 0;
+    let targetGoalId = goalId || null;
+
+    if (leftoverAmount > 0) {
+      if (action === 'save') {
+        if (targetGoalId && targetGoalId !== 'auto-savings' && this.goals.some(g => g.id === targetGoalId)) {
+          this.contributeToGoal(targetGoalId, leftoverAmount);
+        } else if (this.goals.length > 0) {
+          targetGoalId = this.goals[0].id;
+          this.contributeToGoal(targetGoalId, leftoverAmount);
+        } else {
+          // If no goals exist yet, automatically create Emergency Savings goal with leftover amount
+          const newGoal = this.addGoal({
+            name: 'Emergency Savings',
+            targetAmount: Math.max(20000, Math.round(leftoverAmount * 2)),
+            currentAmount: leftoverAmount,
+            emoji: '',
+            deadline: '',
+          });
+          targetGoalId = newGoal.id;
+        }
+      } else if (action === 'carry') {
+        carriedIn = leftoverAmount;
+      }
+    }
+
+    const record = {
+      id: curCutoff.id,
+      salaryConfirmed: true,
+      salaryTxId: tx ? tx.id : null,
+      salaryAmount: amountVal,
+      carriedIn,
+      leftoverAction: action,
+      leftoverAmount,
+      leftoverGoalId: targetGoalId,
+      confirmedAt: new Date().toISOString(),
+    };
+
+    this.saveCutoffRecord(record);
+    return record;
+  }
+
+  // --- DAILY CALENDAR & SPENDING HELPERS ---
+  getDailySpending(start, end) {
+    const expenses = this.transactions.filter(
+      t => t.type === 'expense' && t.date && (!start || t.date >= start) && (!end || t.date <= end)
+    );
+    const map = {};
+    expenses.forEach(t => {
+      const d = t.date;
+      if (!map[d]) {
+        map[d] = {
+          date: d,
+          totalSpent: 0,
+          spent: 0, // non-bill
+          billsSpent: 0,
+          txs: [],
+        };
+      }
+      map[d].totalSpent += t.amount;
+      const isBill = !!t.recurringId || t.categoryId === 'cat-bills' || (t.note && t.note.startsWith('Paid recurring:'));
+      if (isBill) {
+        map[d].billsSpent += t.amount;
+      } else {
+        map[d].spent += t.amount;
+      }
+      map[d].txs.push(t);
+    });
+    return map;
+  }
+
+  getDailyLimit(dateStr = getTodayDateString()) {
+    const isSemi = (this.settings.payCycle || 'semi-monthly') === 'semi-monthly';
+    if (isSemi) {
+      const cutoff = getCutoffForDate(dateStr, this.settings.paydays || [10, 25]);
+      const plan = this.getCutoffPlan(cutoff);
+      return Math.max(1, plan.spendBudget / cutoff.totalDays);
+    } else {
+      const parts = dateStr.split('-');
+      const y = parseInt(parts[0], 10) || new Date().getFullYear();
+      const m = parseInt(parts[1], 10) || (new Date().getMonth() + 1);
+      const totalDays = new Date(y, m, 0).getDate();
+      const ym = `${y}-${String(m).padStart(2, '0')}`;
+      const plan = this.getMonthPlan(ym);
+      return Math.max(1, plan.spendBudget / totalDays);
+    }
+  }
+
+  getDayStatus(dateStr) {
+    const todayStr = getTodayDateString();
+    const isFuture = dateStr > todayStr;
+    const spendingMap = this.getDailySpending(dateStr, dateStr);
+    const dayData = spendingMap[dateStr] || { totalSpent: 0, spent: 0, billsSpent: 0, txs: [] };
+    const limit = this.getDailyLimit(dateStr);
+
+    const dayNum = parseInt(dateStr.slice(8, 10), 10);
+    const paydays = this.settings.paydays || [10, 25];
+    const isPayday = paydays.includes(dayNum);
+
+    const cutoff = getCutoffForDate(dateStr, paydays);
+
+    let status = 'none';
+    if (isFuture) {
+      status = 'future';
+    } else if (dayData.spent === 0 && dayData.billsSpent === 0) {
+      status = 'zero';
+    } else if (dayData.spent < limit * 0.8) {
+      status = 'under';
+    } else if (dayData.spent <= limit) {
+      status = 'close';
+    } else {
+      status = 'over';
+    }
+
+    return {
+      date: dateStr,
+      dayNum,
+      isFuture,
+      isToday: dateStr === todayStr,
+      isPayday,
+      periodType: cutoff.periodType, // 'A' | 'B'
+      periodId: cutoff.id,
+      spent: dayData.spent,
+      billsSpent: dayData.billsSpent,
+      totalSpent: dayData.totalSpent,
+      limit,
+      ratio: limit > 0 ? (dayData.spent / limit) : 0,
+      status,
+      txs: dayData.txs,
+    };
+  }
+
+  getTodayAllowance() {
+    const todayStr = getTodayDateString();
+    const isSemi = (this.settings.payCycle || 'semi-monthly') === 'semi-monthly';
+    const dayStatus = this.getDayStatus(todayStr);
+
+    if (isSemi) {
+      const cutoff = this.getCurrentCutoff();
+      const summary = this.getCutoffSummary(cutoff);
+      // Allowance for today = remainingBudget / daysLeft
+      const todayAllowance = Math.max(0, summary.remainingBudget / cutoff.daysLeft);
+      const todayLeft = Math.max(0, todayAllowance - dayStatus.spent);
+
+      return {
+        todayAllowance,
+        spentToday: dayStatus.spent,
+        billsToday: dayStatus.billsSpent,
+        totalSpentToday: dayStatus.totalSpent,
+        todayLeft,
+        dailyLimit: this.getDailyLimit(todayStr),
+        daysLeftInCutoff: cutoff.daysLeft,
+        nextPayday: cutoff.nextPayday,
+        daysToPayday: cutoff.daysLeft,
+        cutoff,
+        summary,
+        isTight: summary.isTight,
+        isExhausted: summary.isExhausted,
+      };
+    } else {
+      const allowance = this.getDailyAllowance();
+      const todayAllowance = allowance.dailySafeSpend;
+      const todayLeft = Math.max(0, todayAllowance - dayStatus.spent);
+      return {
+        todayAllowance,
+        spentToday: dayStatus.spent,
+        billsToday: dayStatus.billsSpent,
+        totalSpentToday: dayStatus.totalSpent,
+        todayLeft,
+        dailyLimit: this.getDailyLimit(todayStr),
+        daysLeftInCutoff: allowance.daysRemaining,
+        nextPayday: null,
+        daysToPayday: allowance.daysRemaining,
+        cutoff: null,
+        summary: this.getMonthSummary(),
+      };
+    }
+  }
+
   // --- BUDGET PLANNER HELPERS ---
   getDailyAllowance() {
+    const isSemi = (this.settings.payCycle || 'semi-monthly') === 'semi-monthly';
+    if (isSemi) {
+      const cutoff = this.getCurrentCutoff();
+      const summary = this.getCutoffSummary(cutoff);
+      const dailySafeSpend = Math.max(0, summary.remainingBudget / cutoff.daysLeft);
+      return {
+        daysRemaining: cutoff.daysLeft,
+        totalDays: cutoff.totalDays,
+        currentDay: new Date().getDate(),
+        dailySafeSpend,
+        remainingBudget: summary.remainingBudget,
+        cutoff,
+      };
+    }
+
     const now = new Date();
     const currentDay = now.getDate();
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -567,16 +1128,19 @@ class BudgetStore {
       currentDay,
       dailySafeSpend,
       remainingBudget,
+      cutoff: null,
     };
   }
 
   apply503020Rule(incomeVal) {
-    const income = parseFloat(incomeVal) || (this.settings.expectedIncome || 35000);
+    const income = parseFloat(incomeVal) || (parseFloat(this.settings.expectedIncome) || 0);
+    if (income <= 0) return;
     const plannedBudget = Math.round(income * 0.8); // 80% total spending cap (50% needs + 30% wants)
 
     this.updateSettings({
       expectedIncome: income,
       monthlyBudget: plannedBudget,
+      savingsRate: 0.20,
     });
 
     const needs = income * 0.50; // Needs 50%
@@ -649,6 +1213,7 @@ class BudgetStore {
       categoryName: category ? category.name : 'Bills',
       categoryEmoji: category ? category.emoji : '⚡',
       note: `Paid recurring: ${item.name} 🔁`,
+      recurringId: item.id,
       date: todayStr,
     });
 
@@ -810,6 +1375,7 @@ class BudgetStore {
 
   // --- SUMMARY COMPUTATIONS ---
   getMonthSummary(yearMonth = getCurrentMonthKey()) {
+    const plan = this.getMonthPlan(yearMonth);
     const monthTx = this.transactions.filter(t => t.date && t.date.startsWith(yearMonth));
 
     let totalIncome = 0;
@@ -823,12 +1389,13 @@ class BudgetStore {
       }
     });
 
-    const budgetLimit = this.settings.monthlyBudget || 25000;
+    const budgetLimit = plan.spendBudget;
     const remainingBudget = Math.max(0, budgetLimit - totalExpense);
     const usagePercent = budgetLimit > 0 ? (totalExpense / budgetLimit) * 100 : 0;
 
     return {
       yearMonth,
+      plan,
       totalIncome,
       totalExpense,
       balance: totalIncome - totalExpense,
@@ -904,6 +1471,7 @@ class BudgetStore {
       transactions: this.transactions,
       recurring: this.recurring,
       goals: this.goals,
+      cutoffs: this.cutoffs,
       settings: this.settings,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -922,12 +1490,14 @@ class BudgetStore {
       if (data.transactions) this.transactions = data.transactions;
       if (data.recurring) this.recurring = data.recurring;
       if (data.goals) this.goals = data.goals;
+      if (data.cutoffs) this.cutoffs = data.cutoffs;
       if (data.settings) this.settings = data.settings;
 
       this.save(STORAGE_KEYS.CATEGORIES, this.categories);
       this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
       this.save(STORAGE_KEYS.RECURRING, this.recurring);
       this.save(STORAGE_KEYS.GOALS, this.goals);
+      this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
       this.save(STORAGE_KEYS.SETTINGS, this.settings);
 
       this.applyTheme(this.settings.theme);
@@ -947,14 +1517,30 @@ class BudgetStore {
     this.transactions = [];
     this.recurring = [];
     this.goals = [];
-    this.categories = DEFAULT_CATEGORIES;
-    this.settings = DEFAULT_SETTINGS;
+    this.cutoffs = {};
+    this.categories = DEFAULT_CATEGORIES.map(c => ({ ...c }));
+    this.settings = { ...DEFAULT_SETTINGS };
+
+    // Clear all localStorage keys completely
+    try {
+      Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+      localStorage.removeItem('lyka_transactions_v2');
+      localStorage.removeItem('lyka_cutoffs_v2');
+      localStorage.removeItem('lyka_recurring_v2');
+      localStorage.removeItem('lyka_goals_v2');
+      localStorage.removeItem('lyka_settings_v2');
+      localStorage.removeItem('lyka_categories_v2');
+    } catch (e) {
+      console.warn('LocalStorage clear error:', e);
+    }
 
     this.save(STORAGE_KEYS.TRANSACTIONS, []);
     this.save(STORAGE_KEYS.RECURRING, []);
     this.save(STORAGE_KEYS.GOALS, []);
+    this.save(STORAGE_KEYS.CUTOFFS, {});
     this.save(STORAGE_KEYS.CATEGORIES, this.categories);
     this.save(STORAGE_KEYS.SETTINGS, this.settings);
+    localStorage.setItem(STORAGE_KEYS.FIREBASE_INITIALIZED, 'true');
 
     this.applyTheme(this.settings.theme);
     this.notify();
@@ -962,11 +1548,18 @@ class BudgetStore {
     const db = getDb();
     if (db) {
       try {
-        const collections = [FS_COLLECTIONS.TRANSACTIONS, FS_COLLECTIONS.RECURRING, FS_COLLECTIONS.GOALS];
+        const collections = [
+          FS_COLLECTIONS.TRANSACTIONS,
+          FS_COLLECTIONS.RECURRING,
+          FS_COLLECTIONS.GOALS,
+          FS_COLLECTIONS.CUTOFFS,
+        ];
         for (const col of collections) {
           const snap = await getDocs(collection(db, col));
-          for (const d of snap.docs) {
-            await deleteDoc(d.ref);
+          if (!snap.empty) {
+            const batch = writeBatch(db);
+            snap.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
           }
         }
         const batch = writeBatch(db);
@@ -975,6 +1568,10 @@ class BudgetStore {
           currency: this.settings.currency,
           monthlyBudget: this.settings.monthlyBudget,
           expectedIncome: this.settings.expectedIncome,
+          savingsRate: this.settings.savingsRate,
+          payCycle: this.settings.payCycle,
+          paydays: this.settings.paydays,
+          salaryByPayday: this.settings.salaryByPayday,
           soundEnabled: this.settings.soundEnabled,
         });
         await batch.commit();
@@ -982,28 +1579,12 @@ class BudgetStore {
         console.warn('Clear all cloud data error:', err);
       }
     }
+    this.notify();
     return true;
   }
 
   resetToDemoData() {
-    this.categories = DEFAULT_CATEGORIES;
-    this.transactions = getSampleTransactions();
-    this.recurring = DEFAULT_RECURRING;
-    this.goals = DEFAULT_GOALS;
-    this.settings = DEFAULT_SETTINGS;
-
-    this.save(STORAGE_KEYS.CATEGORIES, this.categories);
-    this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
-    this.save(STORAGE_KEYS.RECURRING, this.recurring);
-    this.save(STORAGE_KEYS.GOALS, this.goals);
-    this.save(STORAGE_KEYS.SETTINGS, this.settings);
-
-    this.applyTheme(this.settings.theme);
-    this.notify();
-
-    if (isFirebaseConfigured()) {
-      this.pushLocalDataToCloud().catch(err => console.warn('Demo reset cloud sync error:', err));
-    }
+    return this.clearAllData();
   }
 }
 

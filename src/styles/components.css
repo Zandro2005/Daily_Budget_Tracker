@@ -654,6 +654,14 @@
   pointer-events: auto;
 }
 
+.day-detail-backdrop {
+  z-index: 1050;
+}
+
+.qa-modal-backdrop {
+  z-index: 1200;
+}
+
 .modal-dialog {
   background: var(--bg-card);
   border: 1.5px solid var(--border-color);
@@ -949,14 +957,19 @@
   padding: 0;
 }
 
+/* Hide number input spinners globally across all forms and modals */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button,
 .qa-amount-input::-webkit-outer-spin-button,
 .qa-amount-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
+input[type="number"],
 .qa-amount-input[type="number"] {
   -moz-appearance: textfield;
+  appearance: none;
 }
 
 .qa-amount-input::placeholder {
@@ -1057,4 +1070,60 @@
 .qa-submit-btn:hover {
   box-shadow: 0 6px 20px rgba(85, 168, 232, 0.45);
   transform: translateY(-2px);
+}
+
+/* ====================================================================
+   CALENDAR & WEEK STRIP KAWAII STYLES
+   ==================================================================== */
+
+.icon-coin {
+  animation: coinWiggle 3s ease-in-out infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes coinWiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-8deg) scale(1.08); }
+  75% { transform: rotate(8deg) scale(1.08); }
+}
+
+.cal-cell-btn {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.cal-cell-btn:active {
+  transform: scale(0.92);
+}
+
+.cal-cell-btn:hover {
+  filter: brightness(0.97);
+}
+
+.week-day-cell {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.week-day-cell.today {
+  box-shadow: 0 4px 12px rgba(85, 168, 232, 0.22);
+}
+
+.today-allowance-card {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Night theme adjustments for Calendar */
+[data-theme="night"] .today-allowance-card {
+  background: linear-gradient(135deg, rgba(30, 39, 66, 0.95) 0%, rgba(20, 28, 48, 0.95) 100%) !important;
+  border-color: rgba(98, 128, 180, 0.45) !important;
+}
+
+[data-theme="night"] .payday-banner {
+  background: linear-gradient(135deg, rgba(46, 38, 20, 0.95) 0%, rgba(30, 39, 66, 0.98) 100%) !important;
+  border-color: #E6A800 !important;
+}
+
+[data-theme="night"] .cal-cell-btn {
+  background-color: rgba(255, 255, 255, 0.04) !important;
 }

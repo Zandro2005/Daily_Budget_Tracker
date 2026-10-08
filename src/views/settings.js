@@ -63,7 +63,7 @@ export function renderSettings() {
         <!-- Monthly Target Budget -->
         <div class="form-group">
           <label class="form-label">Monthly Target Budget Cap</label>
-          <input type="number" id="setting-budget" class="form-input" value="${settings.monthlyBudget || 25000}">
+          <input type="number" id="setting-budget" class="form-input" value="${settings.monthlyBudget || 0}" placeholder="0">
         </div>
 
         <!-- Theme Mode -->
@@ -73,6 +73,36 @@ export function renderSettings() {
             <option value="day" ${settings.theme === 'day' ? 'selected' : ''}>Day Mode (Clean Sky Blue & White)</option>
             <option value="night" ${settings.theme === 'night' ? 'selected' : ''}>Night Mode (Twilight Slate)</option>
           </select>
+        </div>
+
+        <!-- Pay Schedule -->
+        <div class="form-group">
+          <label class="form-label">Payday Schedule</label>
+          <select id="setting-paycycle" class="form-select">
+            <option value="semi-monthly" ${(settings.payCycle || 'semi-monthly') === 'semi-monthly' ? 'selected' : ''}>Twice a Month (10th & 25th)</option>
+            <option value="monthly" ${settings.payCycle === 'monthly' ? 'selected' : ''}>Monthly Payday</option>
+          </select>
+        </div>
+
+        <!-- Savings Target % -->
+        <div class="form-group">
+          <label class="form-label">Savings Target (% of each paycheck)</label>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="number" id="setting-savings-pct" class="form-input" min="0" max="90" step="1" value="${Math.round(store.getSavingsRate() * 100)}">
+            <span style="font-weight: 800; font-size: 1.15rem; color: var(--coral-alert);">%</span>
+          </div>
+        </div>
+
+        <!-- 10th Salary -->
+        <div class="form-group">
+          <label class="form-label">Expected Salary on 10th (${settings.currency || '₱'})</label>
+          <input type="number" id="setting-sal-10" class="form-input" value="${(settings.salaryByPayday && settings.salaryByPayday[10] !== undefined) ? settings.salaryByPayday[10] : 0}" placeholder="0">
+        </div>
+
+        <!-- 25th Salary -->
+        <div class="form-group">
+          <label class="form-label">Expected Salary on 25th (${settings.currency || '₱'})</label>
+          <input type="number" id="setting-sal-25" class="form-input" value="${(settings.salaryByPayday && settings.salaryByPayday[25] !== undefined) ? settings.salaryByPayday[25] : 0}" placeholder="0">
         </div>
 
         <!-- Sound Effects -->
@@ -92,12 +122,27 @@ export function renderSettings() {
 
     prefCard.querySelector('#save-pref-btn').onclick = () => {
       const currency = prefCard.querySelector('#setting-currency').value;
-      const monthlyBudget = parseFloat(prefCard.querySelector('#setting-budget').value) || 25000;
       const theme = prefCard.querySelector('#setting-theme').value;
+      const payCycle = prefCard.querySelector('#setting-paycycle').value;
+      const sal10 = parseFloat(prefCard.querySelector('#setting-sal-10').value) || 0;
+      const sal25 = parseFloat(prefCard.querySelector('#setting-sal-25').value) || 0;
+      const savingsPct = parseFloat(prefCard.querySelector('#setting-savings-pct').value) || 28;
+      const savingsRate = Math.max(0, Math.min(0.9, savingsPct / 100));
+      const totalExpected = sal10 + sal25;
+      const monthlyBudget = parseFloat(prefCard.querySelector('#setting-budget').value) || Math.round(totalExpected * (1 - savingsRate));
       const sound = prefCard.querySelector('#setting-sound').checked;
 
       setSoundEnabled(sound);
-      store.updateSettings({ currency, monthlyBudget, theme, soundEnabled: sound });
+      store.updateSettings({
+        currency,
+        monthlyBudget,
+        theme,
+        payCycle,
+        salaryByPayday: { 10: sal10, 25: sal25 },
+        expectedIncome: totalExpected,
+        savingsRate,
+        soundEnabled: sound,
+      });
       playCoin();
       showToast({ text: 'Preferences updated successfully', icon: 'check' });
     };
@@ -277,21 +322,27 @@ export function renderSettings() {
       reader.readAsText(file);
     };
 
-    backupCard.querySelector('#reset-demo-btn').onclick = () => {
-      if (confirm('Load starter demo transactions and goals?')) {
-        store.resetToDemoData();
+    backupCard.querySelector('#reset-demo-btn').onclick = async () => {
+      if (confirm('Reset to clean starter state? This will clear all transactions and reset data.')) {
+        await store.clearAllData();
         playCoin();
-        showToast({ text: 'Loaded starter data', icon: 'check' });
-        renderContent();
+        showToast({ text: 'All transactions cleared & reset', icon: 'check' });
+        setTimeout(() => {
+          window.location.hash = '#dashboard';
+          window.location.reload();
+        }, 500);
       }
     };
 
     backupCard.querySelector('#clear-all-btn').onclick = async () => {
-      if (confirm('Reset everything? This will delete all transactions, recurring bills, and savings goals from both this device and Firebase cloud.')) {
+      if (confirm('Reset everything? This will delete all transactions, cutoff records, recurring bills, and savings goals from both this device and Firebase cloud.')) {
         await store.clearAllData();
         playCoin();
-        showToast({ text: 'All data cleared' });
-        renderContent();
+        showToast({ text: 'All data permanently cleared' });
+        setTimeout(() => {
+          window.location.hash = '#dashboard';
+          window.location.reload();
+        }, 500);
       }
     };
 
