@@ -254,7 +254,7 @@ export function renderPlanner() {
           <span style="font-size: 0.72rem; color: var(--text-muted);">Tap any envelope to set its limit for this cutoff</span>
         </div>
         <button class="icon-btn squish-btn" id="add-env-btn" style="width: 32px; height: 32px; background: var(--primary); color: white; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;" title="Add Envelope">
-          ${ICONS.plus}
+          ${ICONS.plusCircle}
         </button>
       </div>
 
@@ -285,12 +285,19 @@ export function renderPlanner() {
       itemEl.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div style="width: 36px; height: 36px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
-              ${getCategoryIconSvg(cat.id || cat.name)}
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <div style="width: 36px; height: 36px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+                ${getCategoryIconSvg(cat.id || cat.name)}
+              </div>
             </div>
-            <span class="pill" style="font-size: 0.68rem; padding: 0.2rem 0.45rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--danger)' : 'var(--text-main)'}; font-weight: 700;">
-              ${limit > 0 ? (isOver ? `+${formatCurrency(cat.spent - limit, curr)}` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)}`) : 'No Limit'}
-            </span>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;">
+              <div style="color: var(--text-muted); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+                ${ICONS.settings}
+              </div>
+              <span class="pill" style="font-size: 0.68rem; padding: 0.2rem 0.45rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--danger)' : 'var(--text-main)'}; font-weight: 700;">
+                ${limit > 0 ? (isOver ? `+${formatCurrency(cat.spent - limit, curr)}` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)}`) : 'No Limit'}
+              </span>
+            </div>
           </div>
           <div>
             <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); line-height: 1.1; margin-bottom: 0.2rem;">${cat.name}</div>
