@@ -51,9 +51,8 @@ export function renderCalendar() {
     baseDaily = dailyPeriodLimit / totalDays;
     suggestedDaily = Math.round(dailyEnvelopeRemaining / daysLeft);
   } else {
-    const plan = isSemi ? store.getCutoffPlan(curCutoff) : store.getMonthPlan();
-    baseDaily = (plan.spendBudget || 0) / totalDays;
-    suggestedDaily = Math.round(baseDaily);
+    baseDaily = 0;
+    suggestedDaily = 0;
   }
 
   // Filter expenses belonging to Daily Allowance or general
@@ -119,18 +118,20 @@ export function renderCalendar() {
     };
   }
 
-  let todayData = allDaysData.find(d => d.dStr === todayStr);
-  if (!todayData) {
-    const tSpent = dailySpent[todayStr] || 0;
-    const tStart = baseDaily + (yesterdayData ? yesterdayData.leftover : 0);
-    todayData = {
-      dStr: todayStr,
-      dayNum: todayDate.getDate(),
-      spent: tSpent,
-      startAllowance: tStart,
-      leftover: tStart - tSpent
-    };
-  }
+  // Today's allowance: starts with full available Daily Envelope budget without premature deductions
+  const priorDailySpent = txs
+    .filter(t => t.date < todayStr)
+    .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  const tSpent = dailySpent[todayStr] || 0;
+  const tStart = dailyPeriodLimit > 0 ? Math.max(0, dailyPeriodLimit - priorDailySpent) : 0;
+
+  const todayData = {
+    dStr: todayStr,
+    dayNum: todayDate.getDate(),
+    spent: tSpent,
+    startAllowance: tStart,
+    leftover: tStart - tSpent
+  };
 
   // --- HEADER (CLEAN & DIRECT) ---
   const header = document.createElement('div');

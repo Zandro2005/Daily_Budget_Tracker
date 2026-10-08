@@ -117,30 +117,39 @@ export function renderDashboard() {
       }" style="width: ${Math.min(100, Math.round(summary.usagePercent))}%;"></div>
     </div>
 
-    <div class="balance-stats" style="grid-template-columns: repeat(3, 1fr); gap: 0.65rem; margin-top: 1.15rem;">
-      <div class="stat-pill" style="padding: 0.85rem 0.65rem; border-radius: var(--radius-lg); background: rgba(86, 193, 144, 0.08); border: 1.5px solid rgba(86, 193, 144, 0.3); box-shadow: 0 2px 6px rgba(86, 193, 144, 0.08);">
-        <span class="stat-pill-label" style="color: var(--mint-deep); font-size: 0.78rem; font-weight: 700; gap: 0.3rem;">
-          <span style="display: inline-flex; width: 15px; height: 15px;">${ICONS.arrowDownLeft}</span> Income
-        </span>
-        <span class="stat-pill-val val-income" style="font-size: 1.18rem; font-weight: 800; margin-top: 0.3rem; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+    <div class="balance-stats" style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1.15rem;">
+      <!-- Featured Bigger Income Widget -->
+      <div class="stat-pill" style="padding: 0.85rem 1rem; border-radius: var(--radius-lg); background: linear-gradient(135deg, rgba(86, 193, 144, 0.12) 0%, rgba(86, 193, 144, 0.04) 100%); border: 1.5px solid rgba(86, 193, 144, 0.35); box-shadow: 0 3px 10px rgba(86, 193, 144, 0.08); display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
+        <div>
+          <span class="stat-pill-label" style="color: var(--mint-deep); font-size: 0.82rem; font-weight: 800; gap: 0.35rem; letter-spacing: 0.02em;">
+            <span style="display: inline-flex; width: 16px; height: 16px;">${ICONS.arrowDownLeft}</span> Total Income
+          </span>
+          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; margin-top: 0.15rem;">Cutoff Inflow</div>
+        </div>
+        <span class="stat-pill-val val-income" style="font-size: 1.45rem; font-weight: 800; font-family: var(--font-display); letter-spacing: -0.5px;">
           +${formatCurrency(summary.totalIncome, curr)}
         </span>
       </div>
-      <div class="stat-pill" style="padding: 0.85rem 0.65rem; border-radius: var(--radius-lg); background: rgba(255, 123, 137, 0.08); border: 1.5px solid rgba(255, 123, 137, 0.3); box-shadow: 0 2px 6px rgba(255, 123, 137, 0.08);">
-        <span class="stat-pill-label" style="color: var(--coral-alert); font-size: 0.78rem; font-weight: 700; gap: 0.3rem;">
-          <span style="display: inline-flex; width: 15px; height: 15px;">${ICONS.arrowUpRight}</span> Spent
-        </span>
-        <span class="stat-pill-val val-expense" style="font-size: 1.18rem; font-weight: 800; margin-top: 0.3rem; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          -${formatCurrency(summary.totalExpense, curr)}
-        </span>
-      </div>
-      <div class="stat-pill" style="padding: 0.85rem 0.65rem; border-radius: var(--radius-lg); background: rgba(85, 168, 232, 0.08); border: 1.5px solid rgba(85, 168, 232, 0.3); box-shadow: 0 2px 6px rgba(85, 168, 232, 0.08);">
-        <span class="stat-pill-label" style="color: var(--sky-500); font-size: 0.78rem; font-weight: 700; gap: 0.3rem;">
-          <span style="display: inline-flex; width: 15px; height: 15px;">${ICONS.shield}</span> Saved
-        </span>
-        <span class="stat-pill-val" style="color: var(--sky-600); font-size: 1.18rem; font-weight: 800; margin-top: 0.3rem; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${formatCurrency(summary.plan?.savingsTarget || 0, curr)}
-        </span>
+
+      <!-- Smaller, Clean Side-by-Side Spent & Saved -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
+        <div class="stat-pill" style="padding: 0.65rem 0.75rem; border-radius: var(--radius-md); background: rgba(255, 123, 137, 0.06); border: 1px solid rgba(255, 123, 137, 0.22);">
+          <span class="stat-pill-label" style="color: var(--coral-alert); font-size: 0.72rem; font-weight: 700; gap: 0.25rem;">
+            <span style="display: inline-flex; width: 13px; height: 13px;">${ICONS.arrowUpRight}</span> Spent
+          </span>
+          <span class="stat-pill-val val-expense" style="font-size: 1.05rem; font-weight: 800; margin-top: 0.2rem; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            -${formatCurrency(summary.totalExpense, curr)}
+          </span>
+        </div>
+
+        <div class="stat-pill" style="padding: 0.65rem 0.75rem; border-radius: var(--radius-md); background: rgba(85, 168, 232, 0.06); border: 1px solid rgba(85, 168, 232, 0.22);">
+          <span class="stat-pill-label" style="color: var(--sky-500); font-size: 0.72rem; font-weight: 700; gap: 0.25rem;">
+            <span style="display: inline-flex; width: 13px; height: 13px;">${ICONS.shield}</span> Saved
+          </span>
+          <span class="stat-pill-val" style="color: var(--sky-600); font-size: 1.05rem; font-weight: 800; margin-top: 0.2rem; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            ${formatCurrency(summary.plan?.savingsTarget || 0, curr)}
+          </span>
+        </div>
       </div>
     </div>
   `;
