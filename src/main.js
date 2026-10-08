@@ -87,13 +87,13 @@ function initApp() {
           +
         </button>
 
-        <button class="nav-link" data-route="#transactions" title="History">
-          ${ICONS.history}
-          <span>History</span>
-        </button>
         <button class="nav-link" data-route="#calendar" title="Daily Tracker">
           ${ICONS.calendarDays}
           <span>Daily</span>
+        </button>
+        <button class="nav-link" data-route="#transactions" title="History">
+          ${ICONS.history}
+          <span>History</span>
         </button>
       </nav>
     </div>

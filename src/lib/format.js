@@ -3,12 +3,12 @@
 // ====================================================================
 
 export function formatCurrency(amount, currency = '₱') {
-  const num = Number(amount) || 0;
-  const formatted = num.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  const num = Math.round(Number(amount) || 0);
+  const formatted = Math.abs(num).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
-  return `${currency} ${formatted}`;
+  return num < 0 ? `-${currency} ${formatted}` : `${currency} ${formatted}`;
 }
 
 export function formatDate(dateStr) {

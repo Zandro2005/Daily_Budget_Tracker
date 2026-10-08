@@ -15,6 +15,7 @@ let selectedCutoff = null;
 export function renderPlanner() {
   const container = document.createElement('div');
   container.className = 'planner-view anim-fade-in';
+  container.style.paddingBottom = '6.5rem';
 
   function renderContent() {
     container.innerHTML = '';
@@ -339,7 +340,7 @@ export function renderPlanner() {
         </div>
       ` : ''}
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1rem 0.65rem; justify-items: center;" id="envelopes-list"></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 0.85rem; width: 100%;" id="envelopes-list"></div>
     `;
 
     const envelopesList = envelopesCard.querySelector('#envelopes-list');
@@ -357,45 +358,54 @@ export function renderPlanner() {
       const isOver = limit > 0 && cat.spent > limit;
       const percent = limit > 0 ? Math.min(100, Math.round((cat.spent / limit) * 100)) : 0;
       const statusClass = isOver ? 'status-danger' : percent >= 80 ? 'status-warn' : 'status-safe';
+      const remaining = Math.max(0, limit - cat.spent);
 
       const itemEl = document.createElement('div');
       itemEl.className = 'folder-item squish-btn';
-      itemEl.title = `Click to set limit for ${cat.name}`;
+      itemEl.title = `Click to set budget for ${cat.name}`;
 
       itemEl.innerHTML = `
-        <div style="position: relative; display: flex; justify-content: center; width: 100%; margin-bottom: 0.3rem;">
+        <div style="position: relative; display: flex; justify-content: center; width: 100%; margin-bottom: 0.4rem;">
           ${getWindowsFolderSvg(cat.id || cat.name)}
           ${isOver ? `
-            <div style="position: absolute; top: -2px; right: 8px; background: var(--coral-alert); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.72rem; box-shadow: 0 2px 6px rgba(255,100,100,0.4); border: 2px solid white;">!</div>
+            <div style="position: absolute; top: -4px; right: calc(50% - 38px); background: var(--coral-alert); color: white; border-radius: var(--radius-full); padding: 0.1rem 0.45rem; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.68rem; box-shadow: 0 2px 8px rgba(255,100,100,0.4); border: 2px solid white;">
+              Over!
+            </div>
           ` : ''}
         </div>
         
-        <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.88rem; color: var(--text-main); line-height: 1.15; word-break: break-word; max-width: 120px; text-align: center; margin-bottom: 0.2rem;">
+        <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.94rem; color: var(--text-main); line-height: 1.2; text-align: center; margin-bottom: 0.35rem; width: 100%;">
           ${cat.name}
         </div>
 
-        <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center;">
-          ${limit > 0 ? `Allocated: <strong style="color: var(--text-main);">${formatCurrency(limit, curr)}</strong>` : 'No Budget'}
-        </div>
+        ${limit > 0 ? `
+          <!-- Allocated State: Clean Remaining Budget & Progress -->
+          <div style="font-family: var(--font-display); font-size: 1.18rem; font-weight: 800; color: ${isOver ? 'var(--coral-alert)' : 'var(--mint-deep)'}; text-align: center; line-height: 1.1; margin-bottom: 0.2rem;">
+            ${isOver ? `-${formatCurrency(cat.spent - limit, curr)}` : formatCurrency(remaining, curr)}
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
+            ${isOver ? 'Over budget' : `left of ${formatCurrency(limit, curr)}`}
+          </div>
 
-        <div style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">
-          Spent: <strong style="color: var(--text-main);">${formatCurrency(cat.spent, curr)}</strong>
-        </div>
-
-        <div style="margin-top: 0.25rem; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; width: 100%;">
-          ${limit > 0 ? `
-            <span class="pill" style="font-size: 0.64rem; padding: 0.12rem 0.45rem; background: ${isOver ? '#FFE8E8' : 'var(--sky-100)'}; color: ${isOver ? 'var(--coral-alert)' : 'var(--primary)'}; font-weight: 700; border: 1px solid ${isOver ? 'rgba(255,123,137,0.3)' : 'var(--border-color)'};">
-              ${isOver ? `Over by ${formatCurrency(cat.spent - limit, curr)}` : `${formatCurrency(Math.max(0, limit - cat.spent), curr)} left`}
-            </span>
-            <div class="cloud-progress" style="height: 4px; width: 62px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+          <div style="width: 100%; margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 0.28rem;">
+            <div class="cloud-progress" style="height: 6px; width: 100%; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
               <div class="cloud-progress-fill ${statusClass}" style="width: ${percent}%;"></div>
             </div>
-          ` : `
-            <span class="pill" style="font-size: 0.64rem; padding: 0.12rem 0.45rem; background: var(--bg-card-cloud); color: var(--text-muted); font-weight: 700; border: 1px solid var(--border-color);">
-              Tap to allocate
+            <div style="font-size: 0.68rem; color: var(--text-muted); font-weight: 600;">
+              ${formatCurrency(cat.spent, curr)} spent
+            </div>
+          </div>
+        ` : `
+          <!-- Unallocated State: Clean & Friendly Call to Action -->
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-align: center; margin: 0.35rem 0 0.85rem 0;">
+            No budget set
+          </div>
+          <div style="margin-top: auto;">
+            <span class="pill" style="font-size: 0.72rem; padding: 0.32rem 0.75rem; background: var(--sky-100); color: var(--primary); font-weight: 700; border: 1px dashed var(--sky-300); display: inline-flex; align-items: center; gap: 0.25rem;">
+              + Set Budget
             </span>
-          `}
-        </div>
+          </div>
+        `}
       `;
 
       itemEl.onclick = () => {
@@ -535,6 +545,10 @@ export function renderPlanner() {
     const curr = store.getSettings().currency || '₱';
     const currentLimit = isEdit ? (cat.period_limit || Math.round((cat.monthly_limit || 0) / 2) || 0) : 0;
     const catName = isEdit ? cat.name : '';
+    const isSemi = (store.getSettings().payCycle || 'semi-monthly') === 'semi-monthly';
+    const activeCutoff = cutoff || store.getCurrentCutoff();
+    const plan = isSemi ? store.getCutoffPlan(activeCutoff) : store.getMonthPlan();
+    const cutoffLabel = activeCutoff ? activeCutoff.label : 'cutoff';
 
     backdrop.innerHTML = `
       <div class="modal-dialog">
@@ -553,9 +567,9 @@ export function renderPlanner() {
 
           <div class="form-group">
             <label class="form-label">Allocated Budget (${curr})</label>
-            <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${currentLimit}" step="any" placeholder="0">
+            <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${Math.round(currentLimit)}" step="1" placeholder="0">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-              ${isEdit && cat.id === 'cat-daily' ? 'Sets the base daily allowance for your Daily Tracker' : `Allocated portion of your ${cutoff.label} spend budget (${formatCurrency(plan.spendBudget, curr)})`}
+              ${isEdit && cat.id === 'cat-daily' ? 'Sets the base daily allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`}
             </small>
           </div>
           <div class="quick-amount-presets" style="margin-bottom: 1.25rem;">
@@ -594,7 +608,7 @@ export function renderPlanner() {
       btn.onclick = () => {
         playPop();
         const currentVal = parseFloat(input.value) || 0;
-        input.value = (currentVal + parseFloat(btn.dataset.v)).toString();
+        input.value = Math.round(currentVal + parseFloat(btn.dataset.v)).toString();
       };
     });
 
@@ -612,7 +626,7 @@ export function renderPlanner() {
 
     backdrop.querySelector('#limit-form').onsubmit = (e) => {
       e.preventDefault();
-      const val = parseFloat(input.value) || 0;
+      const val = Math.round(parseFloat(input.value) || 0);
       const nameVal = backdrop.querySelector('#env-name').value;
       
       let targetCatId;
@@ -624,7 +638,11 @@ export function renderPlanner() {
         targetCatId = newCat.id;
       }
       
-      store.updateCutoffCategoryLimit(cutoff.id, targetCatId, val);
+      if (isSemi && activeCutoff) {
+        store.updateCutoffCategoryLimit(activeCutoff.id, targetCatId, val);
+      } else {
+        store.updateCategory(targetCatId, { monthly_limit: val });
+      }
       playCoin();
       showToast({ text: `Saved ${nameVal}! 🏷️`, icon: '✨' });
       close();

@@ -249,7 +249,7 @@ function createModalDOM() {
                 type="number" 
                 id="qa-amount" 
                 class="qa-amount-input" 
-                placeholder="0.00" 
+                placeholder="0" 
                 step="any" 
                 inputmode="decimal" 
                 required

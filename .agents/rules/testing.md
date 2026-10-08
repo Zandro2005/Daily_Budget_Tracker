@@ -1,14 +1,14 @@
-# Testing & Verification Rules
+---
+trigger: always_on
+---
 
-The user handles visual/UI testing manually. Keep verification fast.
+# Testing Rules
 
-## Do NOT
-- Do NOT take screenshots (Playwright `browser_take_screenshot`, browser subagent screenshots, etc.).
-- Do NOT use Playwright `browser_snapshot`, `browser_navigate`, `browser_click`, or any other browser automation for testing.
-- Do NOT launch the `browser_subagent` or record browser sessions for verification.
-- Do NOT run long end-to-end or visual test flows.
+When testing or verifying changes, follow these strict rules to ensure efficiency and speed:
 
-## Do
-- Verify changes with fast checks only, e.g. `npm run build` (compile check) or a quick lint/unit test if one exists.
-- After making changes, briefly tell the user what changed and what they should check manually in the app.
-- Only use browser tools if the user explicitly asks for it in that request.
+1. **NO SNAPSHOTS OR SCREENSHOTS**: Do not use browser snapshots, screenshot tools, or browser subagents to visually verify UI changes. These methods are too time-consuming.
+2. **USE FAST TESTS ONLY**: Rely exclusively on fast testing methods. This includes:
+   - Verifying terminal output (e.g., build logs, error messages).
+   - Inspecting code logic directly.
+   - Using fast unit or integration testing if available.
+3. **TRUST THE CODE**: If visual confirmation is needed, rely on verifying the DOM structure, CSS classes, or internal component logic rather than rendering and capturing an image.

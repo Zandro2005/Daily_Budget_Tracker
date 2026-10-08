@@ -13,8 +13,7 @@ import { ICONS } from '../lib/icons.js';
 export function renderCalendar() {
   const container = document.createElement('div');
   container.className = 'anim-fade-in';
-  container.style.paddingBottom = '6rem';
-  container.style.padding = '1rem';
+  container.style.padding = '1rem 1rem 7.5rem 1rem';
 
   const settings = store.getSettings();
   const curr = settings.currency || '₱';
@@ -34,18 +33,27 @@ export function renderCalendar() {
   const startD = parseDate(curCutoff.start);
   const endD = parseDate(curCutoff.end);
   const totalDays = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+  const daysLeft = Math.max(1, curCutoff.daysLeft || 1);
 
   // Base daily allowance strictly derived from Daily Allowance envelope
   const cutoffCategories = store.getCutoffCategorySpending(curCutoff);
   const dailyCat = cutoffCategories.find(c => c.id === 'cat-daily' || c.name.toLowerCase().includes('daily'));
 
+  const dailyPeriodLimit = dailyCat
+    ? (dailyCat.period_limit || (isSemi ? Math.round((dailyCat.monthly_limit || 0) / 2) : (dailyCat.monthly_limit || 0)))
+    : 0;
+  const dailySpentSoFar = dailyCat ? (dailyCat.spent || 0) : 0;
+  const dailyEnvelopeRemaining = Math.max(0, dailyPeriodLimit - dailySpentSoFar);
+
   let baseDaily = 0;
-  if (dailyCat && (dailyCat.period_limit > 0 || dailyCat.monthly_limit > 0)) {
-    const dailyPeriodLimit = dailyCat.period_limit || (isSemi ? dailyCat.monthly_limit / 2 : dailyCat.monthly_limit);
+  let suggestedDaily = 0;
+  if (dailyPeriodLimit > 0) {
     baseDaily = dailyPeriodLimit / totalDays;
+    suggestedDaily = Math.round(dailyEnvelopeRemaining / daysLeft);
   } else {
     const plan = isSemi ? store.getCutoffPlan(curCutoff) : store.getMonthPlan();
     baseDaily = (plan.spendBudget || 0) / totalDays;
+    suggestedDaily = Math.round(baseDaily);
   }
 
   // Filter expenses belonging to Daily Allowance or general
@@ -96,7 +104,7 @@ export function renderCalendar() {
     }
   }
 
-  // Yesterday, Today, Tomorrow data points
+  // Yesterday and Today data points
   let yesterdayData = allDaysData.find(d => d.dStr === yesterdayStr);
   if (!yesterdayData) {
     const ySpent = store.getTransactions()
@@ -122,21 +130,6 @@ export function renderCalendar() {
       startAllowance: tStart,
       leftover: tStart - tSpent
     };
-  }
-
-  let tomorrowData = allDaysData.find(d => d.dStr === tomorrowStr);
-  const tomorrowStart = baseDaily + todayData.leftover;
-  if (!tomorrowData) {
-    tomorrowData = {
-      dStr: tomorrowStr,
-      dayNum: tomorrowDate.getDate(),
-      spent: 0,
-      startAllowance: tomorrowStart,
-      leftover: tomorrowStart
-    };
-  } else {
-    tomorrowData.startAllowance = tomorrowStart;
-    tomorrowData.leftover = tomorrowStart;
   }
 
   // --- HEADER (CLEAN & DIRECT) ---
@@ -248,31 +241,64 @@ export function renderCalendar() {
 
   container.appendChild(chartSection);
 
-  // --- 3 CLEAN WIDGETS (YESTERDAY, TODAY, TOMORROW) ---
+  // --- WIDGETS (SUGGESTED DAILY EXPENSE, TODAY, YESTERDAY) ---
   const widgetsContainer = document.createElement('div');
   widgetsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 0.85rem;';
 
-  // 1. Yesterday (Straight to the Point)
-  const yesterdayCard = document.createElement('div');
-  yesterdayCard.className = 'cloud-card';
-  yesterdayCard.style.cssText = 'padding: 0.85rem 1.15rem; border-radius: var(--radius-lg); display: flex; justify-content: space-between; align-items: center;';
-  yesterdayCard.innerHTML = `
-    <div>
-      <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.95rem; color: var(--text-main);">
-        Yesterday <span style="font-size: 0.76rem; font-weight: 600; color: var(--text-muted);">&bull; ${formatDate(yesterdayStr)}</span>
+  // 1. Suggested Daily Expense Widget (Derived from Allocated Daily Allowance Budget)
+  const suggestedCard = document.createElement('div');
+  suggestedCard.className = 'cloud-card anim-fade-in';
+  suggestedCard.style.cssText = 'padding: 1.15rem 1.25rem; border-radius: var(--radius-lg); background: linear-gradient(135deg, rgba(235, 248, 255, 0.95) 0%, #FFFFFF 100%); border: 1.5px solid var(--sky-200); box-shadow: 0 4px 14px rgba(85, 168, 232, 0.1); position: relative;';
+
+  const hasDailyBudget = dailyPeriodLimit > 0;
+
+  suggestedCard.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.55rem;">
+      <div style="display: flex; align-items: center; gap: 0.45rem;">
+        <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--sky-100); color: var(--primary);">
+          ${ICONS.wallet}
+        </span>
+        <div>
+          <div style="font-family: var(--font-display); font-size: 0.9rem; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 0.05em;">
+            Suggested Daily Expense
+          </div>
+        </div>
       </div>
-      <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">
-        Spent: <strong style="color: var(--text-main);">${formatCurrency(yesterdayData.spent, curr)}</strong> of ${formatCurrency(yesterdayData.startAllowance, curr)}
+      <span class="pill" style="font-size: 0.72rem; font-weight: 700; background: #FFF; border: 1px solid var(--border-color); color: var(--text-muted); padding: 0.18rem 0.55rem; border-radius: var(--radius-full);">
+        ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left
+      </span>
+    </div>
+
+    <!-- Big Suggested Number -->
+    <div style="display: flex; align-items: baseline; gap: 0.4rem; margin: 0.35rem 0 0.65rem 0;">
+      <span style="font-family: var(--font-display); font-size: 2.15rem; font-weight: 800; color: var(--mint-deep); line-height: 1;">
+        ${formatCurrency(suggestedDaily, curr)}
+      </span>
+      <span style="font-size: 0.86rem; font-weight: 700; color: var(--text-muted);">
+        / day
+      </span>
+    </div>
+
+    <!-- Envelope Allocation Context Box -->
+    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(240, 248, 255, 0.75); padding: 0.6rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--sky-200); font-size: 0.76rem;">
+      <div>
+        <span style="color: var(--text-muted); font-weight: 600;">Daily Envelope: </span>
+        <strong style="color: var(--text-main); font-weight: 800;">${hasDailyBudget ? formatCurrency(dailyPeriodLimit, curr) : 'No Budget'}</strong>
+      </div>
+      <div style="text-align: right;">
+        <span style="color: var(--text-muted); font-weight: 600;">Envelope Left: </span>
+        <strong style="color: ${hasDailyBudget ? 'var(--primary)' : 'var(--text-muted)'}; font-weight: 800;">${hasDailyBudget ? formatCurrency(dailyEnvelopeRemaining, curr) : '₱0'}</strong>
       </div>
     </div>
-    <div style="text-align: right;">
-      <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Rolled Over</div>
-      <div style="font-weight: 800; font-family: var(--font-display); font-size: 1.1rem; color: ${yesterdayData.leftover >= 0 ? 'var(--mint-deep)' : 'var(--coral-alert)'};">
-        ${yesterdayData.leftover > 0 ? '+' : ''}${formatCurrency(yesterdayData.leftover, curr)}
+    ${!hasDailyBudget ? `
+      <div style="margin-top: 0.55rem; text-align: center;">
+        <a href="#planner" style="font-size: 0.74rem; color: var(--primary); font-weight: 700; text-decoration: none;">
+          + Allocate Daily Allowance in Planner &rarr;
+        </a>
       </div>
-    </div>
+    ` : ''}
   `;
-  widgetsContainer.appendChild(yesterdayCard);
+  widgetsContainer.appendChild(suggestedCard);
 
   // 2. Today (Main Hero Card)
   const todayCard = document.createElement('div');
@@ -313,28 +339,6 @@ export function renderCalendar() {
     openQuickAddModal('expense');
   };
   widgetsContainer.appendChild(todayCard);
-
-  // 3. Tomorrow (Straight to the Point)
-  const tomorrowCard = document.createElement('div');
-  tomorrowCard.className = 'cloud-card';
-  tomorrowCard.style.cssText = 'padding: 0.85rem 1.15rem; border-radius: var(--radius-lg); display: flex; justify-content: space-between; align-items: center;';
-  tomorrowCard.innerHTML = `
-    <div>
-      <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.95rem; color: var(--text-main);">
-        Tomorrow <span style="font-size: 0.76rem; font-weight: 600; color: var(--text-muted);">&bull; ${formatDate(tomorrowStr)}</span>
-      </div>
-      <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">
-        Estimated starting allowance
-      </div>
-    </div>
-    <div style="text-align: right;">
-      <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Projected</div>
-      <div style="font-weight: 800; font-family: var(--font-display); font-size: 1.1rem; color: var(--primary);">
-        ${formatCurrency(tomorrowData.startAllowance, curr)}
-      </div>
-    </div>
-  `;
-  widgetsContainer.appendChild(tomorrowCard);
 
   container.appendChild(widgetsContainer);
   return container;
