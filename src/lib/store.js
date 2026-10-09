@@ -75,7 +75,7 @@ const DEFAULT_RECURRING = [];
 
 const DEFAULT_GOALS = [];
 
-const FRESH_START_FLAG = 'cloudy_clean_slate_v1';
+const FRESH_START_FLAG = 'lyka_clean_fresh_slate_v2';
 
 class BudgetStore {
   constructor() {
@@ -83,6 +83,7 @@ class BudgetStore {
     this.unsubscribers = [];
     this.isCloudSyncActive = false;
     this._notifyPending = false;
+    this._needsCloudPurge = false;
 
     // Fresh start: wipe any legacy local data on first run
     if (typeof localStorage !== 'undefined' && !localStorage.getItem(FRESH_START_FLAG)) {
@@ -95,6 +96,7 @@ class BudgetStore {
         localStorage.removeItem('lyka_settings_v2');
         localStorage.removeItem('lyka_categories_v2');
         localStorage.setItem(FRESH_START_FLAG, 'true');
+        this._needsCloudPurge = true;
       } catch (_) {}
     }
 
@@ -192,6 +194,12 @@ class BudgetStore {
       return;
     }
 
+    if (this._needsCloudPurge && db) {
+      this._needsCloudPurge = false;
+      this.clearAllData().catch(err => console.warn('Cloud purge error:', err));
+      return;
+    }
+
     setSyncStatus('syncing');
 
     // Unsubscribe previous listeners if any
@@ -207,11 +215,28 @@ class BudgetStore {
           const remoteCats = [];
           snapshot.forEach(docSnap => remoteCats.push(docSnap.data()));
 
-          this.categories = this.sanitizeCategories(remoteCats);
+          // Merge: preserve local category monthly_limit if remote has 0
+          const mergedCats = remoteCats.map(rc => {
+            const local = this.categories.find(lc => lc.id === rc.id || lc.name.toLowerCase() === rc.name.toLowerCase());
+            if (local && (local.monthly_limit > 0) && (!rc.monthly_limit || rc.monthly_limit === 0)) {
+              return { ...rc, monthly_limit: local.monthly_limit };
+            }
+            return rc;
+          });
+
+          // Add any local categories not yet in remote
+          this.categories.forEach(lc => {
+            if (!mergedCats.some(mc => mc.id === lc.id || mc.name.toLowerCase() === lc.name.toLowerCase())) {
+              mergedCats.push(lc);
+              setDoc(doc(db, FS_COLLECTIONS.CATEGORIES, lc.id), lc).catch(() => {});
+            }
+          });
+
+          this.categories = this.sanitizeCategories(mergedCats);
           this.save(STORAGE_KEYS.CATEGORIES, this.categories);
           setSyncStatus('synced');
           this.notify();
-        } else {
+        } else if (this.categories && this.categories.length > 0) {
           // If Firestore is empty, seed it with current categories
           this.seedInitialData(db);
           setSyncStatus('synced');
@@ -225,14 +250,35 @@ class BudgetStore {
 
       // 2. Transactions Realtime Listener
       const unsubTx = onSnapshot(collection(db, FS_COLLECTIONS.TRANSACTIONS), (snapshot) => {
-        const remoteTx = [];
-        snapshot.forEach(docSnap => remoteTx.push(docSnap.data()));
-        // Sort newest first
-        remoteTx.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
-        this.transactions = remoteTx;
-        this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
-        setSyncStatus('synced');
-        this.notify();
+        if (!snapshot.empty) {
+          const remoteTx = [];
+          snapshot.forEach(docSnap => remoteTx.push(docSnap.data()));
+
+          // Intelligent merge by ID: ensure local offline transactions are preserved!
+          const txMap = new Map();
+          remoteTx.forEach(t => txMap.set(t.id, t));
+          this.transactions.forEach(t => {
+            if (!txMap.has(t.id)) {
+              txMap.set(t.id, t);
+              // Push local offline transaction to Firestore
+              setDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t).catch(() => {});
+            }
+          });
+
+          const merged = Array.from(txMap.values());
+          merged.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+          this.transactions = merged;
+          this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+          setSyncStatus('synced');
+          this.notify();
+        } else if (this.transactions && this.transactions.length > 0) {
+          // Firestore is empty but local has transactions! Push them up!
+          const batch = writeBatch(db);
+          this.transactions.forEach(t => batch.set(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t));
+          batch.commit().catch(() => {});
+          setSyncStatus('synced');
+          this.notify();
+        }
       }, (err) => {
         console.warn('Transactions sync error:', err);
         setSyncStatus('error');
@@ -241,33 +287,83 @@ class BudgetStore {
 
       // 3. Recurring Realtime Listener
       const unsubRec = onSnapshot(collection(db, FS_COLLECTIONS.RECURRING), (snapshot) => {
-        const remoteRec = [];
-        snapshot.forEach(docSnap => remoteRec.push(docSnap.data()));
-        this.recurring = remoteRec;
-        this.save(STORAGE_KEYS.RECURRING, this.recurring);
-        this.notify();
+        if (!snapshot.empty) {
+          const remoteRec = [];
+          snapshot.forEach(docSnap => remoteRec.push(docSnap.data()));
+          const recMap = new Map();
+          remoteRec.forEach(r => recMap.set(r.id, r));
+          this.recurring.forEach(r => { if (!recMap.has(r.id)) recMap.set(r.id, r); });
+          this.recurring = Array.from(recMap.values());
+          this.save(STORAGE_KEYS.RECURRING, this.recurring);
+          this.notify();
+        } else if (this.recurring && this.recurring.length > 0) {
+          const batch = writeBatch(db);
+          this.recurring.forEach(r => batch.set(doc(db, FS_COLLECTIONS.RECURRING, r.id), r));
+          batch.commit().catch(() => {});
+        }
       }, (err) => console.warn('Recurring sync error:', err));
       this.unsubscribers.push(unsubRec);
 
       // 4. Goals Realtime Listener
       const unsubGoals = onSnapshot(collection(db, FS_COLLECTIONS.GOALS), (snapshot) => {
-        const remoteGoals = [];
-        snapshot.forEach(docSnap => remoteGoals.push(docSnap.data()));
-        this.goals = remoteGoals;
-        this.save(STORAGE_KEYS.GOALS, this.goals);
-        this.notify();
+        if (!snapshot.empty) {
+          const remoteGoals = [];
+          snapshot.forEach(docSnap => remoteGoals.push(docSnap.data()));
+          const goalsMap = new Map();
+          remoteGoals.forEach(g => goalsMap.set(g.id, g));
+          this.goals.forEach(g => { if (!goalsMap.has(g.id)) goalsMap.set(g.id, g); });
+          this.goals = Array.from(goalsMap.values());
+          this.save(STORAGE_KEYS.GOALS, this.goals);
+          this.notify();
+        } else if (this.goals && this.goals.length > 0) {
+          const batch = writeBatch(db);
+          this.goals.forEach(g => batch.set(doc(db, FS_COLLECTIONS.GOALS, g.id), g));
+          batch.commit().catch(() => {});
+        }
       }, (err) => console.warn('Goals sync error:', err));
       this.unsubscribers.push(unsubGoals);
 
       // 5. Cutoffs Realtime Listener
       const unsubCutoffs = onSnapshot(collection(db, FS_COLLECTIONS.CUTOFFS), (snapshot) => {
-        const remoteCutoffs = {};
-        snapshot.forEach(docSnap => {
-          remoteCutoffs[docSnap.id] = docSnap.data();
-        });
-        this.cutoffs = remoteCutoffs;
-        this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
-        this.notify();
+        if (!snapshot.empty) {
+          const remoteCutoffs = {};
+          snapshot.forEach(docSnap => {
+            remoteCutoffs[docSnap.id] = docSnap.data();
+          });
+
+          // Intelligent merge with local cutoffs:
+          const merged = { ...this.cutoffs };
+          Object.keys(remoteCutoffs).forEach(id => {
+            const localRec = merged[id] || {};
+            const remoteRec = remoteCutoffs[id] || {};
+            merged[id] = {
+              ...localRec,
+              ...remoteRec,
+              categoryLimits: {
+                ...(localRec.categoryLimits || {}),
+                ...(remoteRec.categoryLimits || {}),
+              },
+              salaryConfirmed: Boolean(localRec.salaryConfirmed || remoteRec.salaryConfirmed),
+              paycheckDismissed: Boolean(localRec.paycheckDismissed || remoteRec.paycheckDismissed),
+            };
+          });
+
+          // Also check if local has cutoffs not yet in remote and upload them
+          Object.keys(this.cutoffs || {}).forEach(id => {
+            if (!remoteCutoffs[id]) {
+              setDoc(doc(db, FS_COLLECTIONS.CUTOFFS, id), this.cutoffs[id], { merge: true }).catch(() => {});
+            }
+          });
+
+          this.cutoffs = merged;
+          this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
+          this.notify();
+        } else if (this.cutoffs && Object.keys(this.cutoffs).length > 0) {
+          // Firestore cutoffs collection is empty but local has cutoffs! Push to cloud!
+          const batch = writeBatch(db);
+          Object.values(this.cutoffs).forEach(c => batch.set(doc(db, FS_COLLECTIONS.CUTOFFS, c.id), c));
+          batch.commit().catch(() => {});
+        }
       }, (err) => console.warn('Cutoffs sync error:', err));
       this.unsubscribers.push(unsubCutoffs);
 
@@ -411,23 +507,29 @@ class BudgetStore {
   }
 
   addTransaction(tx) {
-    const category = this.categories.find(c => c.id === tx.categoryId);
-    const isIncome = tx.type === 'income' || tx.categoryId === 'cat-income' || (category && category.name.toLowerCase().includes('income'));
+    const categoryId = tx.categoryId || tx.category;
+    const category = this.categories.find(c => c.id === categoryId);
+    const isIncome = tx.type === 'income' || categoryId === 'cat-income' || (category && category.name.toLowerCase().includes('income'));
     const newTx = {
       id: tx.id || ('tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
       type: isIncome ? 'income' : 'expense',
       amount: parseFloat(tx.amount) || 0,
-      categoryId: tx.categoryId,
+      categoryId: categoryId,
       categoryName: category ? category.name : (tx.categoryName || (isIncome ? 'Salary & Income' : 'General')),
       categoryEmoji: category ? category.emoji : (tx.categoryEmoji || ''),
       note: tx.note ? tx.note.trim() : '',
-      date: tx.date || getTodayDateString(),
+      date: tx.date instanceof Date ? toDateString(tx.date) : (tx.date || getTodayDateString()),
       recurringId: tx.recurringId || null,
       createdAt: tx.createdAt || new Date().toISOString(),
+      isLoan: Boolean(tx.isLoan),
+      borrowerName: tx.borrowerName || null,
+      loanStatus: tx.loanStatus || (tx.isLoan ? 'unpaid' : null),
+      repaidLoanId: tx.repaidLoanId || null,
     };
 
     // Calculate cutoff that this transaction belongs to
-    const txDate = new Date(newTx.date + (newTx.date.includes('T') ? '' : 'T00:00:00'));
+    const dateStr = typeof newTx.date === 'string' ? newTx.date : toDateString(newTx.date);
+    const txDate = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
     const cutoff = this.getCurrentCutoff(txDate);
     if (cutoff) {
       newTx.cutoffId = cutoff.id;
@@ -446,6 +548,22 @@ class BudgetStore {
 
       if (newTx.amount > summary.remainingBudget) {
         throw new Error(`Insufficient budget! You only have ${formatCurrency(summary.remainingBudget, curr)} available to spend in this cutoff (${cutoff.label}). Savings of ${formatCurrency(summary.plan.savingsTarget, curr)} is strictly protected and cannot be compromised.`);
+      }
+
+      // Safeguard: Envelope / Allocation Budget Overlap Check
+      if (categoryId) {
+        const catSpending = this.getCutoffCategorySpending(cutoff);
+        const catSpend = catSpending.find(c => c.id === categoryId);
+        if (catSpend) {
+          if (catSpend.totalFunds <= 0) {
+            throw new Error(`Cannot ${newTx.isLoan ? 'lend from' : 'log expense for'} "${catSpend.name}": Envelope has no allocated budget in cutoff ${cutoff.label}. Please set a budget first in the Planner.`);
+          }
+          const catRemaining = catSpend.totalFunds - catSpend.spent;
+          if (newTx.amount > catRemaining) {
+            const actionWord = newTx.isLoan ? 'lend money' : 'log expense';
+            throw new Error(`Cannot ${actionWord}: Exceeds "${catSpend.name}" envelope budget! Only ${formatCurrency(Math.max(0, catRemaining), curr)} remaining in this envelope (${formatCurrency(catSpend.spent, curr)} already spent of ${formatCurrency(catSpend.totalFunds, curr)}).`);
+          }
+        }
       }
     }
 
@@ -508,6 +626,46 @@ class BudgetStore {
       if (cutoff) {
         updated.cutoffId = cutoff.id;
         updated.cutoffLabel = cutoff.label;
+      }
+    }
+
+    // Safeguard on update: check if updating an expense exceeds envelope or cutoff budget
+    if (updated.type === 'expense' && !updates.skipBudgetCheck) {
+      const oldTx = this.transactions[idx];
+      const txDate = new Date((updated.date || '') + (String(updated.date).includes('T') ? '' : 'T00:00:00'));
+      const cutoff = this.getCurrentCutoff(txDate);
+      if (cutoff) {
+        const summary = this.getCutoffSummary(cutoff);
+        const curr = this.settings.currency || '₱';
+
+        let effectiveCutoffRem = summary.remainingBudget;
+        if (oldTx.type === 'expense' && isDateInRange(oldTx.date, cutoff.start, cutoff.end)) {
+          effectiveCutoffRem += (parseFloat(oldTx.amount) || 0);
+        }
+
+        if (summary.budgetLimit <= 0) {
+          throw new Error(`Cannot update expense: No spend budget logged yet for cutoff ${cutoff.label}. Please log your income first.`);
+        }
+        if (updated.amount > effectiveCutoffRem) {
+          throw new Error(`Insufficient budget! You only have ${formatCurrency(effectiveCutoffRem, curr)} available to spend in this cutoff (${cutoff.label}). Savings is protected.`);
+        }
+
+        if (updated.categoryId) {
+          const catSpending = this.getCutoffCategorySpending(cutoff);
+          const catSpend = catSpending.find(c => c.id === updated.categoryId);
+          if (catSpend) {
+            let effectiveCatRem = catSpend.totalFunds - catSpend.spent;
+            if (oldTx.type === 'expense' && oldTx.categoryId === updated.categoryId && isDateInRange(oldTx.date, cutoff.start, cutoff.end)) {
+              effectiveCatRem += (parseFloat(oldTx.amount) || 0);
+            }
+            if (catSpend.totalFunds <= 0) {
+              throw new Error(`Cannot update expense for "${catSpend.name}": Envelope has no allocated budget in cutoff ${cutoff.label}.`);
+            }
+            if (updated.amount > effectiveCatRem) {
+              throw new Error(`Cannot update expense: Exceeds "${catSpend.name}" envelope budget! Only ${formatCurrency(Math.max(0, effectiveCatRem), curr)} remaining in this envelope.`);
+            }
+          }
+        }
       }
     }
 
@@ -786,17 +944,26 @@ class BudgetStore {
 
   saveCutoffRecord(record) {
     if (!this.cutoffs) this.cutoffs = {};
-    this.cutoffs[record.id] = record;
+    const existing = this.cutoffs[record.id] || {};
+    const merged = {
+      ...existing,
+      ...record,
+      categoryLimits: {
+        ...(existing.categoryLimits || {}),
+        ...(record.categoryLimits || {}),
+      },
+    };
+    this.cutoffs[record.id] = merged;
     this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
     this.notify();
 
     const db = getDb();
     if (db) {
-      setDoc(doc(db, FS_COLLECTIONS.CUTOFFS, record.id), record).catch(err => {
+      setDoc(doc(db, FS_COLLECTIONS.CUTOFFS, record.id), merged, { merge: true }).catch(err => {
         console.warn('Firestore cutoff update error:', err);
       });
     }
-    return record;
+    return merged;
   }
 
   getCutoffSummary(cutoff = this.getCurrentCutoff()) {
@@ -808,12 +975,23 @@ class BudgetStore {
     let totalIncome = 0;
     let totalExpense = 0;
     let billsTotal = 0;
+    let unpaidLoansTotal = 0;
+    let totalLoans = 0;
 
     periodTx.forEach(t => {
       const amt = parseFloat(t.amount) || 0;
       if (t.type === 'income') {
         totalIncome += amt;
       } else if (t.type === 'expense') {
+        const isLoan = !!t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'));
+        if (isLoan) {
+          totalLoans += amt;
+          if (t.loanStatus !== 'repaid') {
+            unpaidLoansTotal += amt;
+          }
+          return;
+        }
+
         totalExpense += amt;
         const isBill = !!t.recurringId || t.categoryId === 'cat-bills' || (t.note && t.note.startsWith('Paid recurring:'));
         if (isBill) {
@@ -822,7 +1000,8 @@ class BudgetStore {
       }
     });
 
-    const budgetLimit = plan.spendBudget;
+    // Unpaid loans directly reduce the available spend budget
+    const budgetLimit = Math.max(0, plan.spendBudget - unpaidLoansTotal);
     const remainingBudget = Math.max(0, budgetLimit - totalExpense);
     const usagePercent = budgetLimit > 0 ? (totalExpense / budgetLimit) * 100 : 0;
     const isTight = budgetLimit > 0 && remainingBudget > 0 && (remainingBudget <= budgetLimit * 0.20 || usagePercent >= 80);
@@ -835,10 +1014,13 @@ class BudgetStore {
       totalIncome,
       totalExpense,
       billsTotal,
+      unpaidLoansTotal,
+      totalLoans,
       dailyExpense: Math.max(0, totalExpense - billsTotal),
       carriedIn: plan.carriedIn,
       baseBudget: plan.paycheck - plan.savingsTarget,
       budgetLimit,
+      rawBudgetLimit: plan.spendBudget,
       remainingBudget,
       usagePercent,
       isTight,
@@ -850,26 +1032,59 @@ class BudgetStore {
   getCutoffCategorySpending(cutoff = this.getCurrentCutoff()) {
     const isSemi = (this.settings.payCycle || 'semi-monthly') === 'semi-monthly';
     const plan = this.getCutoffPlan(cutoff);
-    const periodExpenses = this.transactions.filter(
-      t => t.type === 'expense' && t.date && isDateInRange(t.date, cutoff.start, cutoff.end)
+    const periodTx = this.transactions.filter(
+      t => t.date && isDateInRange(t.date, cutoff.start, cutoff.end)
     );
 
     const spendMap = {};
-    periodExpenses.forEach(t => {
+    const depositMap = {};
+    const loanMap = {};
+
+    periodTx.forEach(t => {
       const catId = t.categoryId || 'cat-general';
-      if (!spendMap[catId]) {
-        spendMap[catId] = {
-          categoryId: catId,
-          name: t.categoryName || 'General',
-          emoji: t.categoryEmoji || '🏷️',
-          total: 0,
-          billsTotal: 0,
-        };
-      }
-      spendMap[catId].total += t.amount;
-      const isBill = !!t.recurringId || t.categoryId === 'cat-bills' || (t.note && t.note.startsWith('Paid recurring:'));
-      if (isBill) {
-        spendMap[catId].billsTotal += t.amount;
+      const amt = parseFloat(t.amount) || 0;
+
+      if (t.type === 'expense') {
+        const isLoan = !!t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'));
+        if (isLoan) {
+          if (!loanMap[catId]) {
+            loanMap[catId] = { unpaidTotal: 0, total: 0 };
+          }
+          loanMap[catId].total += amt;
+          if (t.loanStatus !== 'repaid') {
+            loanMap[catId].unpaidTotal += amt;
+          }
+          return;
+        }
+
+        if (!spendMap[catId]) {
+          spendMap[catId] = {
+            categoryId: catId,
+            name: t.categoryName || 'General',
+            emoji: t.categoryEmoji || '',
+            total: 0,
+            billsTotal: 0,
+          };
+        }
+        spendMap[catId].total += amt;
+        const isBill = !!t.recurringId || t.categoryId === 'cat-bills' || (t.note && t.note.startsWith('Paid recurring:'));
+        if (isBill) {
+          spendMap[catId].billsTotal += amt;
+        }
+      } else if (t.type === 'income') {
+        // Income deposited directly to an envelope (e.g. Misc Envelope or leftover cash)
+        // If this is a repayment of a loan borrowed in this SAME cutoff,
+        // it restores the loan (origLoan.loanStatus === 'repaid', so unpaidTotal is already 0)
+        if (t.repaidLoanId) {
+          const origLoan = this.transactions.find(orig => orig.id === t.repaidLoanId);
+          if (origLoan && isDateInRange(origLoan.date, cutoff.start, cutoff.end)) {
+            return;
+          }
+        }
+        if (!depositMap[catId]) {
+          depositMap[catId] = { total: 0 };
+        }
+        depositMap[catId].total += amt;
       }
     });
 
@@ -879,32 +1094,56 @@ class BudgetStore {
       .map(cat => {
         const spent = spendMap[cat.id] ? spendMap[cat.id].total : 0;
         const billsSpent = spendMap[cat.id] ? spendMap[cat.id].billsTotal : 0;
+        const deposited = (cat.id !== 'cat-income' && depositMap[cat.id]) ? depositMap[cat.id].total : 0;
+        const unpaidLoans = loanMap[cat.id] ? loanMap[cat.id].unpaidTotal : 0;
+        const totalLoans = loanMap[cat.id] ? loanMap[cat.id].total : 0;
+
         const monthlyLimit = cat.monthly_limit || 0;
         const nominalHalf = isSemi ? Math.round(monthlyLimit / 2) : monthlyLimit;
 
         // Specific cutoff limit takes precedence if set, otherwise scale proportionally
-        let limit = nominalHalf;
+        let allocatedLimit = 0;
         if (plan.record && plan.record.categoryLimits && plan.record.categoryLimits[cat.id] !== undefined) {
-          limit = parseFloat(plan.record.categoryLimits[cat.id]) || 0;
+          allocatedLimit = parseFloat(plan.record.categoryLimits[cat.id]) || 0;
         } else if (isSemi && nominalSum > 0 && monthlyLimit > 0) {
           const ratio = (monthlyLimit / 2) / nominalSum;
-          limit = Math.round(plan.spendBudget * ratio);
+          allocatedLimit = Math.round(plan.spendBudget * ratio);
         } else if (!isSemi && this.settings.monthlyBudget > 0 && monthlyLimit > 0) {
           const ratio = monthlyLimit / (this.settings.monthlyBudget || 1);
-          limit = Math.round(plan.spendBudget * ratio);
+          allocatedLimit = Math.round(plan.spendBudget * ratio);
+        } else if (nominalHalf > 0) {
+          allocatedLimit = nominalHalf;
         }
 
-        const percent = limit > 0 ? (spent / limit) * 100 : 0;
+        // Base funds before loan deductions:
+        const baseFunds = allocatedLimit + deposited;
+        // User rule: If budget is set to 2000 and 1000 is borrowed, the set budget is only 1000!
+        // That 1000 is the base until repaid; when repaid, the repaid amount restores the budget.
+        const effectiveLimit = Math.max(0, baseFunds - unpaidLoans);
+        const totalFunds = effectiveLimit;
+        const limit = effectiveLimit;
+        const remaining = effectiveLimit - spent;
+
+        const percent = totalFunds > 0 ? Math.min(100, Math.round((spent / totalFunds) * 100)) : (spent > 0 ? 100 : 0);
+        const isExceeded = (totalFunds > 0 && spent > totalFunds) || (totalFunds === 0 && spent > 0);
+
         return {
           ...cat,
           monthly_limit: monthlyLimit,
+          allocatedLimit,
+          baseFunds,
+          deposited,
+          unpaidLoans,
+          totalLoans,
+          totalFunds,
           period_limit: limit,
           spent,
           billsSpent,
           dailySpent: Math.max(0, spent - billsSpent),
           percent,
-          remaining: Math.max(0, limit - spent),
-          isExceeded: limit > 0 && spent > limit,
+          remaining: Math.max(0, remaining),
+          remainingRaw: remaining,
+          isExceeded,
         };
       })
       .sort((a, b) => b.spent - a.spent);
@@ -922,6 +1161,13 @@ class BudgetStore {
     if (idx !== -1) {
       this.categories[idx].monthly_limit = cutoffLimit * 2;
       this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+
+      const db = getDb();
+      if (db) {
+        updateDoc(doc(db, FS_COLLECTIONS.CATEGORIES, catId), { monthly_limit: cutoffLimit * 2 }).catch(err => {
+          console.warn('Firestore category limit update error:', err);
+        });
+      }
     }
 
     this.notify();
@@ -957,6 +1203,13 @@ class BudgetStore {
     });
     this.save(STORAGE_KEYS.CATEGORIES, this.categories);
 
+    const db = getDb();
+    if (db) {
+      Object.entries(record.categoryLimits).forEach(([catId, cLimit]) => {
+        updateDoc(doc(db, FS_COLLECTIONS.CATEGORIES, catId), { monthly_limit: cLimit * 2 }).catch(() => {});
+      });
+    }
+
     this.notify();
   }
 
@@ -967,35 +1220,27 @@ class BudgetStore {
     const plan = this.getCutoffPlan(curCutoff);
     const hasLoggedIncome = plan.loggedIncome > 0;
 
-    const todayDate = new Date();
-    const dayNum = todayDate.getDate();
-    const paydays = this.settings.paydays || [10, 25];
-    const isPayday = paydays.includes(dayNum);
-
-    // If income has already been logged (>0) and confirmed with a positive salary:
-    const isSalaryConfirmed = Boolean(
-      record &&
-      record.salaryConfirmed &&
-      (parseFloat(record.salaryAmount) > 0 || hasLoggedIncome)
+    // Check if user already confirmed or entered paycheck for this cutoff:
+    // 1. Cutoff record has salaryConfirmed === true
+    // 2. Cutoff record has paycheckDismissed === true
+    // 3. Or income matching salary has already been logged for this cutoff
+    const hasSalaryTx = this.transactions.some(
+      t => t.type === 'income' &&
+        (t.cutoffId === curCutoff.id || isDateInRange(t.date, curCutoff.start, curCutoff.end)) &&
+        (t.categoryId === 'cat-income' || (t.note && (t.note.toLowerCase().includes('salary') || t.note.toLowerCase().includes('paycheck'))))
     );
 
-    // 1. When income is 0 / not logged yet (!hasLoggedIncome), the paycheck modal
-    // MUST appear so the user can log their cutoff income (even when cleared).
-    // 2. When today is payday (10 or 25), the modal MUST appear.
-    // 3. Only hide modal if today is NOT payday AND income has already been logged and confirmed.
-    if (!isPayday && hasLoggedIncome && isSalaryConfirmed) {
+    const isAlreadyDone = Boolean(
+      (record && (record.salaryConfirmed || record.paycheckDismissed)) ||
+      hasSalaryTx ||
+      (hasLoggedIncome && record && record.salaryConfirmed)
+    );
+
+    if (isAlreadyDone) {
       return null;
     }
 
-    // If today is payday and user already confirmed TODAY's payday:
-    if (isPayday && isSalaryConfirmed && record && record.confirmedAt) {
-      const confirmedDate = record.confirmedAt.slice(0, 10);
-      const todayStr = getTodayDateString();
-      if (confirmedDate === todayStr) {
-        return null;
-      }
-    }
-
+    const paydays = this.settings.paydays || [10, 25];
     const prevCutoff = getPreviousCutoff(curCutoff, paydays);
     const prevSummary = this.getCutoffSummary(prevCutoff);
     const leftover = Math.max(
@@ -1011,7 +1256,7 @@ class BudgetStore {
     return {
       cutoff: curCutoff,
       salary: scheduledSalary > 0 ? scheduledSalary : (plan.loggedIncome || 0),
-      isPayday,
+      isPayday: paydays.includes(new Date().getDate()),
       hasLoggedIncome,
       previous: {
         cutoff: prevCutoff,
@@ -1020,7 +1265,13 @@ class BudgetStore {
     };
   }
 
-  confirmPayday({ amount, leftoverAction = 'save', goalId, note } = {}) {
+  dismissPayday(cutoffId = this.getCurrentCutoff().id) {
+    const record = this.getCutoffRecord(cutoffId) || { id: cutoffId };
+    record.paycheckDismissed = true;
+    this.saveCutoffRecord(record);
+  }
+
+  confirmPayday({ amount, leftoverAction = 'save', goalId, envelopeId, note } = {}) {
     const curCutoff = this.getCurrentCutoff();
     const defaultSalary = (this.settings.salaryByPayday && this.settings.salaryByPayday[curCutoff.payday] !== undefined)
       ? parseFloat(this.settings.salaryByPayday[curCutoff.payday])
@@ -1041,7 +1292,7 @@ class BudgetStore {
       });
     }
 
-    // 2. Handle leftover from previous cutoff (defaults to 'save' so remaining money goes to savings)
+    // 2. Handle leftover from previous cutoff (supports savings goal OR depositing into envelope like Misc!)
     const paydays = this.settings.paydays || [10, 25];
     const prevCutoff = getPreviousCutoff(curCutoff, paydays);
     const prevSummary = this.getCutoffSummary(prevCutoff);
@@ -1054,9 +1305,21 @@ class BudgetStore {
     const action = leftoverAction || 'save';
     let carriedIn = 0;
     let targetGoalId = goalId || null;
+    let targetEnvId = envelopeId || null;
 
     if (leftoverAmount > 0) {
-      if (action === 'save') {
+      if (action === 'envelope') {
+        const envCat = this.categories.find(c => c.id === targetEnvId) || this.categories.find(c => c.id === 'cat-misc') || this.categories[0];
+        targetEnvId = envCat ? envCat.id : 'cat-misc';
+        this.addTransaction({
+          type: 'income',
+          amount: leftoverAmount,
+          categoryId: targetEnvId,
+          categoryName: envCat ? envCat.name : 'Miscellaneous',
+          note: `Excess from last cutoff (${prevCutoff.label})`,
+          date: getTodayDateString(),
+        });
+      } else if (action === 'save') {
         if (targetGoalId && targetGoalId !== 'auto-savings' && this.goals.some(g => g.id === targetGoalId)) {
           this.contributeToGoal(targetGoalId, leftoverAmount);
         } else if (this.goals.length > 0) {
@@ -1078,20 +1341,76 @@ class BudgetStore {
       }
     }
 
+    const existingRecord = this.getCutoffRecord(curCutoff.id) || {};
     const record = {
+      ...existingRecord,
       id: curCutoff.id,
       salaryConfirmed: true,
-      salaryTxId: tx ? tx.id : null,
+      salaryTxId: tx ? tx.id : (existingRecord.salaryTxId || null),
       salaryAmount: amountVal,
       carriedIn,
       leftoverAction: action,
       leftoverAmount,
       leftoverGoalId: targetGoalId,
+      leftoverEnvId: targetEnvId,
       confirmedAt: new Date().toISOString(),
     };
 
     this.saveCutoffRecord(record);
     return record;
+  }
+
+  // --- LOAN / HIRAM (MONEY LENT OUT) HELPERS ---
+  repayLoan(txId) {
+    const tx = this.transactions.find(t => t.id === txId);
+    if (!tx) return null;
+
+    // Update loan status to 'repaid'
+    tx.loanStatus = 'repaid';
+    tx.repaidAt = new Date().toISOString();
+    this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+
+    const db = getDb();
+    if (db) {
+      updateDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, tx.id), {
+        loanStatus: 'repaid',
+        repaidAt: tx.repaidAt,
+      }).catch(err => console.warn('Firestore loan repay update error:', err));
+    }
+
+    // Automatically deposit repaid money back into the exact envelope it was deducted from
+    const repaymentTx = this.addTransaction({
+      type: 'income',
+      amount: tx.amount,
+      categoryId: tx.categoryId,
+      categoryName: tx.categoryName,
+      note: `${tx.borrowerName || 'Borrower'} (repaid hiram)`,
+      date: getTodayDateString(),
+      repaidLoanId: tx.id,
+    });
+
+    this.notify();
+    return { originalTx: tx, repaymentTx };
+  }
+
+  getAllLoans() {
+    return this.transactions.filter(
+      t => Boolean(t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)')))
+    ).sort((a, b) => {
+      // Unpaid loans first, then newest first
+      const aUnpaid = a.loanStatus !== 'repaid';
+      const bUnpaid = b.loanStatus !== 'repaid';
+      if (aUnpaid && !bUnpaid) return -1;
+      if (!aUnpaid && bUnpaid) return 1;
+      return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
+    });
+  }
+
+  getCutoffLoans(cutoff = this.getCurrentCutoff()) {
+    return this.transactions.filter(
+      t => (t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'))) &&
+        t.date && isDateInRange(t.date, cutoff.start, cutoff.end)
+    );
   }
 
   // --- DAILY CALENDAR & SPENDING HELPERS ---
@@ -1106,15 +1425,19 @@ class BudgetStore {
         map[d] = {
           date: d,
           totalSpent: 0,
-          spent: 0, // non-bill
+          spent: 0, // non-bill, non-loan consumable spending
           billsSpent: 0,
+          loansLent: 0,
           txs: [],
         };
       }
       map[d].totalSpent += t.amount;
       const isBill = !!t.recurringId || t.categoryId === 'cat-bills' || (t.note && t.note.startsWith('Paid recurring:'));
+      const isLoan = !!t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'));
       if (isBill) {
         map[d].billsSpent += t.amount;
+      } else if (isLoan) {
+        map[d].loansLent = (map[d].loansLent || 0) + t.amount;
       } else {
         map[d].spent += t.amount;
       }
@@ -1144,7 +1467,7 @@ class BudgetStore {
     const todayStr = getTodayDateString();
     const isFuture = dateStr > todayStr;
     const spendingMap = this.getDailySpending(dateStr, dateStr);
-    const dayData = spendingMap[dateStr] || { totalSpent: 0, spent: 0, billsSpent: 0, txs: [] };
+    const dayData = spendingMap[dateStr] || { totalSpent: 0, spent: 0, billsSpent: 0, loansLent: 0, txs: [] };
     const limit = this.getDailyLimit(dateStr);
 
     const dayNum = parseInt(dateStr.slice(8, 10), 10);
@@ -1176,7 +1499,8 @@ class BudgetStore {
       periodId: cutoff.id,
       spent: dayData.spent,
       billsSpent: dayData.billsSpent,
-      totalSpent: dayData.totalSpent,
+      loansLent: dayData.loansLent || 0,
+      totalSpent: dayData.spent + dayData.billsSpent,
       limit,
       ratio: limit > 0 ? (dayData.spent / limit) : 0,
       status,

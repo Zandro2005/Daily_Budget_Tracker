@@ -51,7 +51,8 @@ export function closeQuickAddModal() {
 
 function resetModalState(type = 'expense', presetDate = null, editTx = null) {
   if (!modalInstance) return;
-  const targetType = editTx ? editTx.type : type;
+  const isLoanTx = Boolean(editTx && (editTx.isLoan || (editTx.note && editTx.note.toLowerCase().includes('(hiram)'))));
+  const targetType = editTx ? (isLoanTx ? 'borrow' : editTx.type) : type;
   currentSelectedType = targetType;
   currentEditingTx = editTx || null;
 
@@ -63,18 +64,31 @@ function resetModalState(type = 'expense', presetDate = null, editTx = null) {
 
   const titleEl = modalInstance.querySelector('#qa-modal-title');
   if (titleEl) {
-    titleEl.textContent = editTx ? 'Edit Transaction' : 'Add Transaction';
+    titleEl.textContent = editTx
+      ? (isLoanTx ? 'Edit Hiram (Loan)' : 'Edit Transaction')
+      : (targetType === 'borrow' ? 'Record Hiram (Lend Money)' : 'Add Transaction');
   }
 
   const submitBtn = modalInstance.querySelector('#qa-submit-btn');
   if (submitBtn) {
-    submitBtn.textContent = editTx ? 'Save Changes' : 'Save Transaction';
+    submitBtn.textContent = editTx
+      ? 'Save Changes'
+      : (targetType === 'borrow' ? 'Record Hiram' : 'Save Transaction');
   }
 
   const typeButtons = modalInstance.querySelectorAll('.qa-type-btn');
   typeButtons.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.type === targetType);
   });
+
+  const borrowerWrap = modalInstance.querySelector('#qa-borrower-wrap');
+  const borrowerInput = modalInstance.querySelector('#qa-borrower');
+  if (borrowerWrap) {
+    borrowerWrap.style.display = targetType === 'borrow' ? 'block' : 'none';
+  }
+  if (borrowerInput) {
+    borrowerInput.value = editTx ? (editTx.borrowerName || '') : '';
+  }
 
   const amountInput = modalInstance.querySelector('#qa-amount');
   if (amountInput) {
@@ -91,7 +105,7 @@ function resetModalState(type = 'expense', presetDate = null, editTx = null) {
     dateInput.value = editTx ? editTx.date : (presetDate || getTodayDateString());
   }
 
-  renderCategoryChips(targetType, modalInstance, editTx ? editTx.categoryId : null);
+  renderCategoryChips(targetType, modalInstance, editTx ? editTx.categoryId : (targetType === 'borrow' ? 'cat-daily' : null));
   updateBudgetValidation(modalInstance);
 }
 
@@ -101,15 +115,27 @@ function renderCategoryChips(type, root = modalInstance, selectedCategoryId = nu
   if (!container) return;
   container.innerHTML = '';
 
-  const categories = store.getCategories();
-  const filtered = type === 'income'
-    ? categories.filter(c => c.name.toLowerCase().includes('income') || c.monthly_limit === 0)
-    : categories.filter(c => !c.name.toLowerCase().includes('income'));
+  const catLabel = root.querySelector('#qa-cat-label');
+  if (catLabel) {
+    catLabel.textContent = type === 'borrow'
+      ? 'Minus from which envelope / budget cut:'
+      : (type === 'income' ? 'Deposit into envelope:' : 'Envelope / Category');
+  }
 
-  const displayList = filtered.length > 0 ? filtered : categories;
+  const categories = store.getCategories();
+  let displayList;
+  if (type === 'borrow') {
+    displayList = categories.filter(c => !c.name.toLowerCase().includes('income'));
+  } else if (type === 'income') {
+    displayList = categories;
+  } else {
+    displayList = categories.filter(c => !c.name.toLowerCase().includes('income'));
+  }
 
   displayList.forEach((cat, index) => {
-    const isSelected = selectedCategoryId ? cat.id === selectedCategoryId : index === 0;
+    const isSelected = selectedCategoryId
+      ? cat.id === selectedCategoryId
+      : (type === 'borrow' ? (cat.id === 'cat-daily' || index === 0) : index === 0);
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = `qa-cat-pill ${isSelected ? 'selected' : ''}`;
@@ -125,6 +151,7 @@ function renderCategoryChips(type, root = modalInstance, selectedCategoryId = nu
       playPop();
       container.querySelectorAll('.qa-cat-pill').forEach(c => c.classList.remove('selected'));
       pill.classList.add('selected');
+      updateBudgetValidation(root);
     });
 
     container.appendChild(pill);
@@ -158,14 +185,37 @@ function updateBudgetValidation(root = modalInstance) {
     return;
   }
 
-  // Expense mode:
+  // Expense / Hiram mode:
   const amountVal = parseFloat(amountInput.value) || 0;
 
-  // If editing an existing expense in this cutoff, add back original amount to compute effective remaining budget
-  let effectiveRemaining = summary.remainingBudget;
+  // 1. Cutoff Spend Budget Remaining
+  let effectiveTotalRemaining = summary.remainingBudget;
   if (currentEditingTx && currentEditingTx.type === 'expense') {
-    effectiveRemaining += (parseFloat(currentEditingTx.amount) || 0);
+    effectiveTotalRemaining += (parseFloat(currentEditingTx.amount) || 0);
   }
+
+  // 2. Selected Envelope Budget Remaining
+  const selectedCatPill = root.querySelector('.qa-cat-pill.selected');
+  const selectedCatId = selectedCatPill ? selectedCatPill.dataset.id : null;
+  const catSpending = store.getCutoffCategorySpending(cutoff);
+  const selectedCatSpend = catSpending.find(c => c.id === selectedCatId);
+
+  let effectiveCatRemaining = null;
+  let catTotalFunds = 0;
+  let catSpent = 0;
+  let catName = selectedCatSpend ? selectedCatSpend.name : 'Envelope';
+
+  if (selectedCatSpend) {
+    catTotalFunds = selectedCatSpend.totalFunds;
+    catSpent = selectedCatSpend.spent;
+    let baseRemaining = catTotalFunds - catSpent;
+    if (currentEditingTx && currentEditingTx.type === 'expense' && currentEditingTx.categoryId === selectedCatId) {
+      baseRemaining += (parseFloat(currentEditingTx.amount) || 0);
+    }
+    effectiveCatRemaining = baseRemaining;
+  }
+
+  const isLoan = currentSelectedType === 'borrow';
 
   if (summary.budgetLimit <= 0 && !currentEditingTx) {
     // Insufficient income: No income logged yet for this cutoff!
@@ -183,8 +233,8 @@ function updateBudgetValidation(root = modalInstance) {
     submitBtn.disabled = true;
     submitBtn.style.opacity = '0.5';
     submitBtn.style.cursor = 'not-allowed';
-  } else if (amountVal > effectiveRemaining) {
-    // Insufficient spend budget: exceeds spend budget and would compromise savings!
+  } else if (selectedCatSpend && catTotalFunds <= 0) {
+    // Envelope has NO budget allocated!
     alertEl.style.display = 'block';
     alertEl.style.background = 'rgba(255, 235, 237, 0.95)';
     alertEl.style.border = '1.5px solid var(--coral-alert)';
@@ -192,16 +242,49 @@ function updateBudgetValidation(root = modalInstance) {
     alertEl.innerHTML = `
       <div style="font-weight: 800; display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem;">
         <span style="display: flex; width: 15px; height: 15px;">${ICONS.alertTriangle}</span>
-        <span>Insufficient Spend Budget</span>
+        <span>No Budget Allocated for "${catName}"</span>
       </div>
-      <div>Only <strong>${formatCurrency(effectiveRemaining, curr)}</strong> available for this cutoff. Savings of <strong>${formatCurrency(summary.plan.savingsTarget, curr)}</strong> is protected and cannot be touched.</div>
+      <div>This envelope has <strong>${curr} 0</strong> allocated for ${cutoff.label}. Set a budget for "${catName}" in the Planner first before logging ${isLoan ? 'loans' : 'expenses'}.</div>
     `;
     submitBtn.disabled = true;
     submitBtn.style.opacity = '0.5';
     submitBtn.style.cursor = 'not-allowed';
-  } else if (amountVal > 0 && (effectiveRemaining - amountVal) <= summary.budgetLimit * 0.20) {
+  } else if (selectedCatSpend && effectiveCatRemaining !== null && amountVal > effectiveCatRemaining) {
+    // Exceeds Envelope Allocation Budget!
+    const overAmt = amountVal - effectiveCatRemaining;
+    alertEl.style.display = 'block';
+    alertEl.style.background = 'rgba(255, 235, 237, 0.95)';
+    alertEl.style.border = '1.5px solid var(--coral-alert)';
+    alertEl.style.color = '#B91C1C';
+    alertEl.innerHTML = `
+      <div style="font-weight: 800; display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem;">
+        <span style="display: flex; width: 15px; height: 15px;">${ICONS.alertTriangle}</span>
+        <span>Exceeds "${catName}" Envelope Budget</span>
+      </div>
+      <div>Only <strong>${formatCurrency(Math.max(0, effectiveCatRemaining), curr)}</strong> remaining in "${catName}" (${formatCurrency(catSpent, curr)} spent of ${formatCurrency(catTotalFunds, curr)}). This ${isLoan ? 'loan' : 'expense'} exceeds it by <strong>${formatCurrency(overAmt, curr)}</strong> and will not be logged.</div>
+    `;
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+    submitBtn.style.cursor = 'not-allowed';
+  } else if (amountVal > effectiveTotalRemaining) {
+    // Insufficient total spend budget!
+    alertEl.style.display = 'block';
+    alertEl.style.background = 'rgba(255, 235, 237, 0.95)';
+    alertEl.style.border = '1.5px solid var(--coral-alert)';
+    alertEl.style.color = '#B91C1C';
+    alertEl.innerHTML = `
+      <div style="font-weight: 800; display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem;">
+        <span style="display: flex; width: 15px; height: 15px;">${ICONS.alertTriangle}</span>
+        <span>Insufficient Cutoff Spend Budget</span>
+      </div>
+      <div>Only <strong>${formatCurrency(effectiveTotalRemaining, curr)}</strong> available in total cutoff spend budget. Savings (${formatCurrency(summary.plan.savingsTarget, curr)}) is strictly protected.</div>
+    `;
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+    submitBtn.style.cursor = 'not-allowed';
+  } else if (amountVal > 0 && (effectiveTotalRemaining - amountVal) <= summary.budgetLimit * 0.20) {
     // Tight Budget Warning on prospective expense!
-    const remAfter = Math.max(0, effectiveRemaining - amountVal);
+    const remAfter = Math.max(0, effectiveTotalRemaining - amountVal);
     alertEl.style.display = 'block';
     alertEl.style.background = 'rgba(255, 251, 230, 0.95)';
     alertEl.style.border = '1.5px solid #FFD666';
@@ -211,23 +294,7 @@ function updateBudgetValidation(root = modalInstance) {
         <span style="display: flex; width: 15px; height: 15px;">${ICONS.alertTriangle}</span>
         <span>Tight Budget Alert</span>
       </div>
-      <div>This expense leaves only <strong>${formatCurrency(remAfter, curr)}</strong> remaining for this cutoff (${cutoff.label}). Savings (${formatCurrency(summary.plan.savingsTarget, curr)}) remains safe.</div>
-    `;
-    submitBtn.disabled = false;
-    submitBtn.style.opacity = '1';
-    submitBtn.style.cursor = 'pointer';
-  } else if (summary.isTight && amountVal === 0) {
-    // Budget is currently tight
-    alertEl.style.display = 'block';
-    alertEl.style.background = 'rgba(255, 251, 230, 0.95)';
-    alertEl.style.border = '1.5px solid #FFD666';
-    alertEl.style.color = '#8C6D00';
-    alertEl.innerHTML = `
-      <div style="font-weight: 800; display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem;">
-        <span style="display: flex; width: 15px; height: 15px;">${ICONS.alertTriangle}</span>
-        <span>Budget is Tight</span>
-      </div>
-      <div>Only <strong>${formatCurrency(effectiveRemaining, curr)}</strong> left (${Math.round(summary.usagePercent)}% used) for ${cutoff.label}. Savings (${formatCurrency(summary.plan.savingsTarget, curr)}) is safe.</div>
+      <div>This expense leaves <strong>${formatCurrency(remAfter, curr)}</strong> remaining for this cutoff (${cutoff.label}). Savings (${formatCurrency(summary.plan.savingsTarget, curr)}) remains safe.</div>
     `;
     submitBtn.disabled = false;
     submitBtn.style.opacity = '1';
@@ -260,19 +327,31 @@ function createModalDOM() {
         <button class="modal-close" id="qa-close-btn" type="button" aria-label="Close">&times;</button>
       </div>
 
-      <!-- Symmetrical 50/50 Type Switcher (No Emojis) -->
-      <div class="qa-type-toggle">
+      <!-- Symmetrical 3-Way Type Switcher (Expense, Income, Hiram) -->
+      <div class="qa-type-toggle" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.35rem; background: var(--bg-card-cloud); padding: 0.25rem; border-radius: var(--radius-full); border: 1px solid var(--border-color); margin-bottom: 1rem;">
         <button type="button" class="qa-type-btn ${currentSelectedType === 'expense' ? 'active' : ''}" data-type="expense">
           Expense
         </button>
         <button type="button" class="qa-type-btn ${currentSelectedType === 'income' ? 'active' : ''}" data-type="income">
           Income
         </button>
+        <button type="button" class="qa-type-btn ${currentSelectedType === 'borrow' ? 'active' : ''}" data-type="borrow" style="white-space: nowrap;">
+          Hiram (Lend)
+        </button>
       </div>
 
       <form id="qa-form">
         <!-- Dynamic Budget Alert / Insufficient Notice -->
         <div id="qa-budget-alert" style="display: none; margin-bottom: 0.85rem; font-size: 0.76rem; border-radius: var(--radius-sm); padding: 0.55rem 0.75rem; line-height: 1.35;"></div>
+
+        <!-- Borrower Name Field (Displayed when Hiram is selected) -->
+        <div id="qa-borrower-wrap" class="qa-field-group" style="display: ${currentSelectedType === 'borrow' ? 'block' : 'none'}; margin-bottom: 0.85rem;">
+          <label class="form-label" for="qa-borrower">Who borrowed? (Borrower Name)</label>
+          <input type="text" id="qa-borrower" class="form-input" placeholder="e.g. Ate Trish" style="font-weight: 700;">
+          <small style="color: #8C6D00; font-size: 0.72rem; display: block; margin-top: 0.25rem;">
+            Will automatically minus from your selected envelope below for this cutoff.
+          </small>
+        </div>
 
         <!-- Centered Hero Amount Input -->
         <div class="qa-field-group">
@@ -295,7 +374,9 @@ function createModalDOM() {
 
         <!-- Symmetrical 2-Column Categories (Clean Text, No Emojis) -->
         <div class="qa-cat-wrap">
-          <label class="form-label">Category</label>
+          <label class="form-label" id="qa-cat-label">
+            ${currentSelectedType === 'borrow' ? 'Minus from which envelope / budget cut:' : (currentSelectedType === 'income' ? 'Deposit into envelope:' : 'Category')}
+          </label>
           <div id="qa-category-list" class="qa-cat-list"></div>
         </div>
 
@@ -313,7 +394,7 @@ function createModalDOM() {
 
         <!-- Balanced Full-Width Save / Update Button -->
         <button type="submit" class="qa-submit-btn squish-btn" id="qa-submit-btn">
-          Save Transaction
+          ${currentSelectedType === 'borrow' ? 'Save Hiram' : 'Save Transaction'}
         </button>
       </form>
     </div>
@@ -334,6 +415,12 @@ function createModalDOM() {
       const nextType = btn.dataset.type;
       currentSelectedType = nextType;
       typeButtons.forEach(b => b.classList.toggle('active', b.dataset.type === nextType));
+      const borrowerWrap = backdrop.querySelector('#qa-borrower-wrap');
+      if (borrowerWrap) borrowerWrap.style.display = nextType === 'borrow' ? 'block' : 'none';
+      const submitBtn = backdrop.querySelector('#qa-submit-btn');
+      if (submitBtn && !currentEditingTx) {
+        submitBtn.textContent = nextType === 'borrow' ? 'Save Hiram' : 'Save Transaction';
+      }
       renderCategoryChips(nextType, backdrop);
       updateBudgetValidation(backdrop);
     });
@@ -359,9 +446,31 @@ function createModalDOM() {
 
     const selectedCatEl = backdrop.querySelector('.qa-cat-pill.selected');
     const categoryId = selectedCatEl ? selectedCatEl.dataset.id : null;
-    const isIncome = currentSelectedType === 'income' || categoryId === 'cat-income';
+    const isBorrow = currentSelectedType === 'borrow';
+    const borrowerVal = isBorrow ? (backdrop.querySelector('#qa-borrower')?.value || '').trim() : '';
+
+    if (isBorrow && !borrowerVal && !currentEditingTx) {
+      playPop();
+      showToast({ text: "Please enter who borrowed the money (e.g. Ate Trish)", icon: "⚠️" });
+      backdrop.querySelector('#qa-borrower')?.focus();
+      return;
+    }
+
+    const noteRaw = backdrop.querySelector('#qa-note').value.trim();
+    let note = noteRaw;
+    let isLoan = isBorrow;
+    let loanBorrower = borrowerVal;
+
+    if (isBorrow) {
+      loanBorrower = borrowerVal || (currentEditingTx?.borrowerName || 'Someone');
+      note = `${loanBorrower} (hiram)` + (noteRaw ? ` - ${noteRaw}` : '');
+    } else if (noteRaw && noteRaw.toLowerCase().includes('(hiram)')) {
+      isLoan = true;
+      loanBorrower = noteRaw.replace(/\(hiram\)/i, '').replace(/[-–]/g, '').trim() || 'Someone';
+    }
+
+    const isIncome = currentSelectedType === 'income';
     const selectedType = isIncome ? 'income' : 'expense';
-    const note = backdrop.querySelector('#qa-note').value;
     const date = backdrop.querySelector('#qa-date').value;
 
     const txDate = new Date(date + (date.includes('T') ? '' : 'T00:00:00'));
@@ -381,6 +490,28 @@ function createModalDOM() {
         showToast({ text: `Cannot log expense: No income logged yet for ${cutoff.label}. Please log income first.` });
         return;
       }
+
+      if (categoryId) {
+        const catSpending = store.getCutoffCategorySpending(cutoff);
+        const catSpend = catSpending.find(c => c.id === categoryId);
+        if (catSpend) {
+          let effectiveCatRem = catSpend.totalFunds - catSpend.spent;
+          if (currentEditingTx && currentEditingTx.type === 'expense' && currentEditingTx.categoryId === categoryId) {
+            effectiveCatRem += (parseFloat(currentEditingTx.amount) || 0);
+          }
+          if (catSpend.totalFunds <= 0) {
+            playPop();
+            showToast({ text: `Cannot log: Envelope "${catSpend.name}" has no allocated budget for ${cutoff.label}. Set budget in Planner first.` });
+            return;
+          }
+          if (amountVal > effectiveCatRem) {
+            playPop();
+            showToast({ text: `Cannot log: Exceeds "${catSpend.name}" budget! Only ${formatCurrency(Math.max(0, effectiveCatRem), currentCurr)} left.` });
+            return;
+          }
+        }
+      }
+
       if (amountVal > effectiveRemaining) {
         playPop();
         showToast({ text: `Insufficient spend budget! Only ${formatCurrency(effectiveRemaining, currentCurr)} available.` });
@@ -398,6 +529,11 @@ function createModalDOM() {
           categoryId,
           note,
           date,
+          ...(isLoan ? {
+            isLoan: true,
+            borrowerName: loanBorrower,
+            loanStatus: currentEditingTx.loanStatus || 'unpaid',
+          } : {}),
         });
 
         playCoin();
@@ -421,6 +557,11 @@ function createModalDOM() {
         categoryId,
         note,
         date,
+        ...(isLoan ? {
+          isLoan: true,
+          borrowerName: loanBorrower,
+          loanStatus: 'unpaid',
+        } : {}),
       });
 
       playCoin();
@@ -428,8 +569,12 @@ function createModalDOM() {
         firePastelConfetti();
       }
 
+      const toastText = isLoan
+        ? `Lent ${formatCurrency(amountVal, currentCurr)} to ${loanBorrower} (minused from budget) 🤝`
+        : `Saved ${selectedType === 'income' ? '+' : '-'}${formatCurrency(amountVal, currentCurr)}`;
+
       showToast({
-        text: `Saved ${selectedType === 'income' ? '+' : '-'}${formatCurrency(amountVal, currentCurr)}`,
+        text: toastText,
         icon: 'check',
         onUndo: () => {
           store.deleteTransaction(newTx.id);

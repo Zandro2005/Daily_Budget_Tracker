@@ -11,7 +11,7 @@ import { store } from './lib/store.js';
 import { playPop, playPuppyChirp } from './lib/audio.js';
 import { openQuickAddModal } from './components/quickAddModal.js';
 import { ICONS } from './lib/icons.js';
-import { getSyncStatus, onSyncStatusChange } from './lib/firebase.js';
+import { initPullToRefresh, triggerAppRefresh } from './components/pullToRefresh.js';
 
 // Views
 import { renderDashboard } from './views/dashboard.js';
@@ -37,19 +37,6 @@ const ROUTES = {
   '#settings': renderSettings,
 };
 
-function getSyncBadgeHtml(status) {
-  if (status === 'synced') {
-    return `<span class="pill" style="background: rgba(86, 193, 144, 0.15); color: var(--mint-deep); font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Live Cloud Sync Active"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--mint-deep);"></span>Synced</span>`;
-  }
-  if (status === 'syncing') {
-    return `<span class="pill" style="background: rgba(255, 210, 157, 0.25); color: #C67A10; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Syncing with Firebase..."><span style="width: 7px; height: 7px; border-radius: 50%; background: #C67A10;"></span>Syncing</span>`;
-  }
-  if (status === 'error') {
-    return `<span class="pill" style="background: rgba(255, 123, 137, 0.2); color: var(--danger); font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Cloud Sync Warning"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--danger);"></span>Sync alert</span>`;
-  }
-  return `<span class="pill" style="background: var(--sky-100); color: var(--text-muted); font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; display: flex; align-items: center; gap: 0.3rem;" title="Local Storage Mode"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted);"></span>Local</span>`;
-}
-
 function initApp() {
   const appRoot = document.getElementById('app');
   if (!appRoot) return;
@@ -73,15 +60,15 @@ function initApp() {
         </a>
 
         <div class="header-controls">
-          <a href="#settings" id="header-sync-badge" style="text-decoration: none; cursor: pointer;">
-            ${getSyncBadgeHtml(getSyncStatus())}
-          </a>
           <button class="icon-btn squish-btn" id="theme-toggle-btn" title="Toggle Day/Night" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;">
             ${store.getSettings().theme === 'night' ? ICONS.moon : ICONS.sun}
           </button>
           <a href="#settings" class="icon-btn squish-btn" title="Settings" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;">
             ${ICONS.settings}
           </a>
+          <button class="icon-btn squish-btn" id="app-refresh-btn" title="Refresh & Sync App" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; color: var(--primary);">
+            <span class="refresh-btn-icon" style="display: inline-flex; width: 18px; height: 18px;">${ICONS.refresh}</span>
+          </button>
         </div>
       </header>
 
@@ -117,18 +104,21 @@ function initApp() {
   `;
 
   // Attach Header Events
+  const refreshBtn = document.getElementById('app-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      triggerAppRefresh();
+    });
+  }
+
+  // Initialize Native Pull-To-Refresh for Standalone PWA Home Screen mode
+  initPullToRefresh();
+
   const themeBtn = document.getElementById('theme-toggle-btn');
   themeBtn.addEventListener('click', () => {
     playPop();
     const newTheme = store.toggleTheme();
     themeBtn.innerHTML = newTheme === 'night' ? ICONS.moon : ICONS.sun;
-  });
-
-  const syncBadgeEl = document.getElementById('header-sync-badge');
-  onSyncStatusChange((newStatus) => {
-    if (syncBadgeEl) {
-      syncBadgeEl.innerHTML = getSyncBadgeHtml(newStatus);
-    }
   });
 
   const quickAddBtn = document.getElementById('nav-quick-add');

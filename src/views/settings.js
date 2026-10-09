@@ -5,7 +5,7 @@
 
 import { store } from '../lib/store.js';
 import { playPop, playCoin, isSoundEnabled, setSoundEnabled } from '../lib/audio.js';
-import { isFirebaseConfigured } from '../lib/firebase.js';
+import { isFirebaseConfigured, getSyncStatus, onSyncStatusChange, getSyncBadgeHtml } from '../lib/firebase.js';
 import { showToast } from '../components/toast.js';
 import { ICONS } from '../lib/icons.js';
 
@@ -153,9 +153,9 @@ export function renderSettings() {
         <h3 style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
           ${ICONS.repeat} Firebase Realtime Cloud Sync
         </h3>
-        <span class="pill" style="background: ${isCloudConnected ? 'rgba(86, 193, 144, 0.15)' : 'var(--sky-100)'}; color: ${isCloudConnected ? 'var(--mint-deep)' : 'var(--text-muted)'}; font-weight: 700;">
-          ${isCloudConnected ? '● Realtime Sync Active' : '○ Offline Local Mode'}
-        </span>
+        <div id="settings-sync-badge">
+          ${getSyncBadgeHtml(getSyncStatus())}
+        </div>
       </div>
 
       <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.15rem;">
@@ -175,6 +175,11 @@ export function renderSettings() {
         </div>
       `}
     `;
+
+    const syncBadgeEl = dbCard.querySelector('#settings-sync-badge');
+    onSyncStatusChange((newStatus) => {
+      if (syncBadgeEl) syncBadgeEl.innerHTML = getSyncBadgeHtml(newStatus);
+    });
 
     if (dbCard.querySelector('#fb-sync-now-btn')) {
       dbCard.querySelector('#fb-sync-now-btn').onclick = async () => {
@@ -250,6 +255,41 @@ export function renderSettings() {
     };
 
     container.appendChild(backupCard);
+
+    // 4. Fresh Start / Delete All Data
+    const dangerCard = document.createElement('div');
+    dangerCard.className = 'cloud-card';
+    dangerCard.style.marginTop = '1.5rem';
+    dangerCard.style.border = '1.5px solid var(--coral-alert)';
+    dangerCard.style.background = 'linear-gradient(135deg, rgba(255, 235, 237, 0.4) 0%, rgba(255, 255, 255, 0.95) 100%)';
+    dangerCard.innerHTML = `
+      <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: #B91C1C; margin: 0 0 0.65rem 0; display: flex; align-items: center; gap: 0.45rem;">
+        <span style="display: flex; width: 18px; height: 18px;">${ICONS.trash}</span>
+        Fresh Start (Delete All Data)
+      </h3>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.15rem; line-height: 1.5;">
+        Permanently delete all transactions, cutoff records, hiram loans, and envelope allocations to start with a fresh slate.
+      </p>
+      <button class="btn squish-btn" id="fresh-start-btn" style="background: var(--coral-alert); color: white; border: none; font-weight: 700; padding: 0.65rem 1.25rem; border-radius: var(--radius-full); cursor: pointer;">
+        Delete All Data & Start Fresh
+      </button>
+    `;
+
+    dangerCard.querySelector('#fresh-start-btn').onclick = async () => {
+      playPop();
+      if (confirm('Are you sure you want to delete ALL data and start fresh? This cannot be undone.')) {
+        try {
+          await store.clearAllData();
+          playCoin();
+          showToast({ text: 'All data deleted. Starting fresh! 🌟', icon: 'check' });
+          window.location.hash = '#dashboard';
+        } catch (err) {
+          showToast({ text: 'Error clearing data: ' + err.message });
+        }
+      }
+    };
+
+    container.appendChild(dangerCard);
   }
 
   renderContent();

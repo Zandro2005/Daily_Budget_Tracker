@@ -6,6 +6,7 @@
 import { store } from '../lib/store.js';
 import { formatCurrency, formatDate, stripEmojis, escapeHtml } from '../lib/format.js';
 import { playPop, playCoin } from '../lib/audio.js';
+import { firePastelConfetti } from '../lib/confetti.js';
 import { openQuickAddModal } from '../components/quickAddModal.js';
 import { showToast } from '../components/toast.js';
 import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
@@ -176,13 +177,24 @@ export function renderTransactions() {
               <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                 ${escapeHtml(stripEmojis(t.note) || stripEmojis(t.categoryName))}
               </div>
-              <div style="font-size: 0.76rem; color: var(--text-muted);">
-                ${formatDate(t.date)} &bull; <span class="pill" style="padding: 0.1rem 0.5rem; font-size: 0.7rem;">${escapeHtml(stripEmojis(t.categoryName))}</span>
+              <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.15rem;">
+                <span>${formatDate(t.date)}</span> &bull; 
+                <span class="pill" style="padding: 0.1rem 0.5rem; font-size: 0.7rem;">${escapeHtml(stripEmojis(t.categoryName))}</span>
+                ${(t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'))) ? `
+                  <span class="pill" style="padding: 0.08rem 0.45rem; font-size: 0.68rem; font-weight: 800; background: ${t.loanStatus === 'repaid' ? 'rgba(86,193,144,0.15)' : 'rgba(255,171,0,0.15)'}; color: ${t.loanStatus === 'repaid' ? 'var(--mint-deep)' : '#B37400'}; border: 1px solid ${t.loanStatus === 'repaid' ? 'rgba(86,193,144,0.4)' : 'rgba(255,171,0,0.4)'};">
+                    ${t.loanStatus === 'repaid' ? '✓ Repaid' : '🤝 Hiram'}
+                  </span>
+                ` : ''}
               </div>
             </div>
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0;">
+            ${((t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'))) && t.loanStatus !== 'repaid' && t.type === 'expense') ? `
+              <button class="btn btn-sm squish-btn tx-repay-btn" data-id="${t.id}" title="Mark Paid Back" style="padding: 0.22rem 0.55rem; font-size: 0.72rem; font-weight: 800; border-radius: var(--radius-full); background: rgba(86, 193, 144, 0.15); color: var(--mint-deep); border: 1.5px solid var(--mint-deep); cursor: pointer; white-space: nowrap;">
+                Mark Paid
+              </button>
+            ` : ''}
             <span style="font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; color: ${
               t.type === 'income' ? 'var(--mint-deep)' : 'var(--coral-alert)'
             };">
@@ -201,6 +213,23 @@ export function renderTransactions() {
 
     html += `</div>`;
     listWrapper.innerHTML = html;
+
+    listWrapper.querySelectorAll('.tx-repay-btn').forEach(btn => {
+      btn.onclick = () => {
+        playPop();
+        const id = btn.dataset.id;
+        const res = store.repayLoan(id);
+        if (res) {
+          playCoin();
+          firePastelConfetti();
+          showToast({
+            text: `${res.originalTx.borrowerName || 'Borrower'} paid back ${formatCurrency(res.originalTx.amount, curr)}! Returned to envelope.`,
+            icon: 'check',
+          });
+          renderListOnly();
+        }
+      };
+    });
 
     listWrapper.querySelectorAll('.tx-edit-btn').forEach(btn => {
       btn.onclick = () => {

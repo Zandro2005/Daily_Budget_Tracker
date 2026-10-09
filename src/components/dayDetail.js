@@ -6,7 +6,8 @@
 import { store } from '../lib/store.js';
 import { formatCurrency, formatDate, getTodayDateString, parseDate, escapeHtml } from '../lib/format.js';
 import { openQuickAddModal } from './quickAddModal.js';
-import { playPop } from '../lib/audio.js';
+import { playPop, playCoin } from '../lib/audio.js';
+import { firePastelConfetti } from '../lib/confetti.js';
 import { showToast } from './toast.js';
 import { ICONS, getCategoryIconSvg } from '../lib/icons.js';
 
@@ -60,6 +61,11 @@ export function renderDayDetail(dateStr = getTodayDateString(), onUpdated = null
           <div style="font-family: var(--font-display); font-size: 1.65rem; font-weight: 700; color: var(--text-main); margin: 0.2rem 0;">
             ${formatCurrency(dayStatus.totalSpent, curr)} <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);">spent</span>
           </div>
+          ${dayStatus.loansLent > 0 ? `
+            <div style="font-size: 0.74rem; font-weight: 700; color: #D97706; margin-top: 0.15rem;">
+              🤝 ${formatCurrency(dayStatus.loansLent, curr)} lent out (from envelope)
+            </div>
+          ` : ''}
         </div>
         <div>
           ${statusPillHtml}
@@ -100,14 +106,24 @@ export function renderDayDetail(dateStr = getTodayDateString(), onUpdated = null
                     <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                       ${escapeHtml(t.note || t.categoryName)}
                     </div>
-                    <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem;">
+                    <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
                       <span>${escapeHtml(t.categoryName)}</span>
                       ${isBill ? '<span class="pill" style="padding: 0.05rem 0.35rem; font-size: 0.65rem; background: #E6F0FA; color: var(--primary);">Bill ⚡</span>' : ''}
+                      ${(t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'))) ? `
+                        <span class="pill" style="padding: 0.05rem 0.35rem; font-size: 0.65rem; font-weight: 800; background: ${t.loanStatus === 'repaid' ? 'rgba(86,193,144,0.15)' : 'rgba(255,171,0,0.15)'}; color: ${t.loanStatus === 'repaid' ? 'var(--mint-deep)' : '#B37400'}; border: 1px solid ${t.loanStatus === 'repaid' ? 'rgba(86,193,144,0.4)' : 'rgba(255,171,0,0.4)'};">
+                          ${t.loanStatus === 'repaid' ? '✓ Repaid' : '🤝 Hiram'}
+                        </span>
+                      ` : ''}
                     </div>
                   </div>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 0.45rem;">
+                  ${((t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'))) && t.loanStatus !== 'repaid' && t.type === 'expense') ? `
+                    <button class="btn btn-sm squish-btn day-tx-repay-btn" data-id="${t.id}" title="Mark Paid Back" style="padding: 0.18rem 0.45rem; font-size: 0.68rem; font-weight: 800; border-radius: var(--radius-full); background: rgba(86, 193, 144, 0.15); color: var(--mint-deep); border: 1px solid var(--mint-deep); cursor: pointer; white-space: nowrap;">
+                      Mark Paid
+                    </button>
+                  ` : ''}
                   <span style="font-family: var(--font-display); font-weight: 800; font-size: 0.96rem; color: ${t.type === 'income' ? 'var(--mint-deep)' : 'var(--text-main)'};">
                     ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount, curr)}
                   </span>
@@ -129,6 +145,25 @@ export function renderDayDetail(dateStr = getTodayDateString(), onUpdated = null
         ${ICONS.plusCircle} Add Expense for this day
       </button>
     `;
+
+    // Hook repay buttons
+    container.querySelectorAll('.day-tx-repay-btn').forEach(btn => {
+      btn.onclick = () => {
+        playPop();
+        const id = btn.dataset.id;
+        const res = store.repayLoan(id);
+        if (res) {
+          playCoin();
+          firePastelConfetti();
+          showToast({
+            text: `${res.originalTx.borrowerName || 'Borrower'} paid back ${formatCurrency(res.originalTx.amount, curr)}! Returned to envelope.`,
+            icon: 'check',
+          });
+          update();
+          if (typeof onUpdated === 'function') onUpdated();
+        }
+      };
+    });
 
     // Hook edit buttons
     container.querySelectorAll('.day-tx-edit-btn').forEach(btn => {

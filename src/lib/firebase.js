@@ -146,3 +146,16 @@ export function onSyncStatusChange(fn) {
   syncListeners.add(fn);
   return () => syncListeners.delete(fn);
 }
+
+export function getSyncBadgeHtml(status = currentSyncStatus) {
+  if (status === 'synced') {
+    return `<span class="pill" style="background: rgba(86, 193, 144, 0.15); color: var(--mint-deep); font-size: 0.76rem; font-weight: 700; padding: 0.25rem 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid rgba(86, 193, 144, 0.4);" title="Live Cloud Sync Active"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--mint-deep);"></span>Synced</span>`;
+  }
+  if (status === 'syncing') {
+    return `<span class="pill" style="background: rgba(255, 210, 157, 0.25); color: #C67A10; font-size: 0.76rem; font-weight: 700; padding: 0.25rem 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid #FFE58F;" title="Syncing with Firebase..."><span style="width: 7px; height: 7px; border-radius: 50%; background: #C67A10;"></span>Syncing</span>`;
+  }
+  if (status === 'error') {
+    return `<span class="pill" style="background: rgba(255, 123, 137, 0.2); color: var(--danger); font-size: 0.76rem; font-weight: 700; padding: 0.25rem 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid var(--coral-alert);" title="Cloud Sync Warning"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--danger);"></span>Sync alert</span>`;
+  }
+  return `<span class="pill" style="background: var(--sky-100); color: var(--text-muted); font-size: 0.76rem; font-weight: 700; padding: 0.25rem 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid var(--border-color);" title="Local Storage Mode"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted);"></span>Local Mode</span>`;
+}

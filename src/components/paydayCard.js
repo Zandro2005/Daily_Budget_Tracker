@@ -106,19 +106,34 @@ export function renderPaydayCard() {
         <div style="font-size: 0.72rem; color: #8C6D00; margin-bottom: 0.45rem; line-height: 1.35;">
           Unspent money will automatically go to your savings:
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.45rem;">
-          <label style="display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0.42rem; background: #FFF; border-radius: var(--radius-sm); border: 1.5px solid #FFD666; font-size: 0.74rem; font-weight: 700; cursor: pointer; color: #8C6D00;">
-            <input type="radio" name="leftover-action" value="save" checked style="accent-color: #FAAD14;">
-            <span>Go to Savings</span>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.35rem; margin-bottom: 0.45rem;">
+          <label style="display: flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.42rem 0.2rem; background: #FFF; border-radius: var(--radius-sm); border: 1.5px solid #FFD666; font-size: 0.72rem; font-weight: 700; cursor: pointer; color: #8C6D00;">
+            <input type="radio" name="leftover-action" value="envelope" checked style="accent-color: #FAAD14;">
+            <span>To Envelope</span>
           </label>
-          <label style="display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0.42rem; background: #FFF; border-radius: var(--radius-sm); border: 1px solid #FFE58F; font-size: 0.74rem; font-weight: 700; cursor: pointer; color: var(--text-muted);">
+          <label style="display: flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.42rem 0.2rem; background: #FFF; border-radius: var(--radius-sm); border: 1px solid #FFE58F; font-size: 0.72rem; font-weight: 700; cursor: pointer; color: var(--text-muted);">
+            <input type="radio" name="leftover-action" value="save" style="accent-color: #FAAD14;">
+            <span>To Savings</span>
+          </label>
+          <label style="display: flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.42rem 0.2rem; background: #FFF; border-radius: var(--radius-sm); border: 1px solid #FFE58F; font-size: 0.72rem; font-weight: 700; cursor: pointer; color: var(--text-muted);">
             <input type="radio" name="leftover-action" value="carry" style="accent-color: #FAAD14;">
             <span>Carry Over</span>
           </label>
         </div>
 
-        <div id="leftover-goal-picker" style="margin-top: 0.45rem;">
-          <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #8C6D00; margin-bottom: 0.2rem;">Deposit into:</label>
+        <!-- Envelope Picker (Default) -->
+        <div id="leftover-env-picker" style="margin-top: 0.45rem;">
+          <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #8C6D00; margin-bottom: 0.2rem;">Deposit into Envelope:</label>
+          <select id="leftover-env-select" class="form-select" style="font-size: 0.75rem; padding: 0.35rem 0.55rem; width: 100%; border-color: #FFD666; background: #FFF;">
+            ${store.getCategories().filter(c => !c.name.toLowerCase().includes('income')).map(c => `
+              <option value="${c.id}" ${c.id === 'cat-misc' || c.name.toLowerCase().includes('misc') ? 'selected' : ''}>${c.name}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <!-- Savings Goal Picker -->
+        <div id="leftover-goal-picker" style="margin-top: 0.45rem; display: none;">
+          <label style="display: block; font-size: 0.7rem; font-weight: 700; color: #8C6D00; margin-bottom: 0.2rem;">Deposit into Goal:</label>
           <select id="leftover-goal-select" class="form-select" style="font-size: 0.75rem; padding: 0.35rem 0.55rem; width: 100%; border-color: #FFD666; background: #FFF;">
             ${goals.length === 0 ? '<option value="auto-savings">Emergency Savings (Auto-deposit)</option>' : ''}
             ${goals.map(g => `<option value="${g.id}">Goal: ${g.name} (${formatCurrency(g.currentAmount, curr)})</option>`).join('')}
@@ -133,14 +148,16 @@ export function renderPaydayCard() {
     </button>
   `;
 
-  // Attach Radio event for goal picker
+  // Attach Radio event for goal/env pickers
   if (hasLeftover) {
     const radioInputs = card.querySelectorAll('input[name="leftover-action"]');
+    const envPicker = card.querySelector('#leftover-env-picker');
     const goalPicker = card.querySelector('#leftover-goal-picker');
     radioInputs.forEach(r => {
       r.addEventListener('change', () => {
         playPop();
-        goalPicker.style.display = r.value === 'save' ? 'block' : 'none';
+        if (envPicker) envPicker.style.display = r.value === 'envelope' ? 'block' : 'none';
+        if (goalPicker) goalPicker.style.display = r.value === 'save' ? 'block' : 'none';
       });
     });
   }
@@ -150,6 +167,9 @@ export function renderPaydayCard() {
     e.stopPropagation();
     playPop();
     isDismissedForSession = true;
+    if (store.dismissPayday) {
+      store.dismissPayday(cutoff.id);
+    }
     card.style.opacity = '0';
     card.style.transform = 'translateY(-6px)';
     setTimeout(() => card.remove(), 150);
@@ -165,15 +185,19 @@ export function renderPaydayCard() {
       return;
     }
 
-    let leftoverAction = 'save';
+    let leftoverAction = 'envelope';
     let goalId = null;
+    let envelopeId = null;
 
     if (hasLeftover) {
       const checkedRadio = card.querySelector('input[name="leftover-action"]:checked');
-      leftoverAction = checkedRadio ? checkedRadio.value : 'save';
+      leftoverAction = checkedRadio ? checkedRadio.value : 'envelope';
       if (leftoverAction === 'save') {
         const goalSelect = card.querySelector('#leftover-goal-select');
         goalId = goalSelect ? goalSelect.value : null;
+      } else if (leftoverAction === 'envelope') {
+        const envSelect = card.querySelector('#leftover-env-select');
+        envelopeId = envSelect ? envSelect.value : 'cat-misc';
       }
     }
 
@@ -181,6 +205,7 @@ export function renderPaydayCard() {
       amount,
       leftoverAction,
       goalId,
+      envelopeId,
     });
 
     playSuccess();

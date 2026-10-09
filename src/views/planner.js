@@ -355,10 +355,11 @@ export function renderPlanner() {
 
     filteredCats.forEach(cat => {
       const limit = isSemi ? (cat.period_limit || 0) : (cat.monthly_limit || 0);
-      const isOver = limit > 0 && cat.spent > limit;
-      const percent = limit > 0 ? Math.min(100, Math.round((cat.spent / limit) * 100)) : 0;
+      const isOver = cat.isExceeded;
+      const percent = cat.percent;
       const statusClass = isOver ? 'status-danger' : percent >= 80 ? 'status-warn' : 'status-safe';
-      const remaining = Math.max(0, limit - cat.spent);
+      const remaining = cat.remaining;
+      const hasFunds = (cat.totalFunds > 0) || (limit > 0);
 
       const itemEl = document.createElement('div');
       itemEl.className = 'folder-item squish-btn';
@@ -371,20 +372,28 @@ export function renderPlanner() {
             <div style="position: absolute; top: -4px; right: calc(50% - 38px); background: var(--coral-alert); color: white; border-radius: var(--radius-full); padding: 0.1rem 0.45rem; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.68rem; box-shadow: 0 2px 8px rgba(255,100,100,0.4); border: 2px solid white;">
               Over!
             </div>
-          ` : ''}
+          ` : (cat.unpaidLoans > 0 ? `
+            <div style="position: absolute; top: -4px; right: calc(50% - 42px); background: #F59E0B; color: white; border-radius: var(--radius-full); padding: 0.1rem 0.4rem; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.65rem; box-shadow: 0 2px 8px rgba(245,158,11,0.4); border: 2px solid white;">
+              🤝 Lent
+            </div>
+          ` : (cat.deposited > 0 && cat.allocatedLimit === 0 ? `
+            <div style="position: absolute; top: -4px; right: calc(50% - 42px); background: var(--mint-deep); color: white; border-radius: var(--radius-full); padding: 0.1rem 0.4rem; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.65rem; box-shadow: 0 2px 8px rgba(86,193,144,0.4); border: 2px solid white;">
+              +Added
+            </div>
+          ` : ''))}
         </div>
         
         <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.94rem; color: var(--text-main); line-height: 1.2; text-align: center; margin-bottom: 0.35rem; width: 100%;">
           ${escapeHtml(cat.name)}
         </div>
 
-        ${limit > 0 ? `
-          <!-- Allocated State: Clean Remaining Budget & Progress -->
+        ${hasFunds ? `
+          <!-- Funds Available (either allocated budget or deposited money like excess from last cutoff) -->
           <div style="font-family: var(--font-display); font-size: 1.18rem; font-weight: 800; color: ${isOver ? 'var(--coral-alert)' : 'var(--mint-deep)'}; text-align: center; line-height: 1.1; margin-bottom: 0.2rem;">
-            ${isOver ? `-${formatCurrency(cat.spent - limit, curr)}` : formatCurrency(remaining, curr)}
+            ${isOver ? `-${formatCurrency(cat.spent - cat.totalFunds, curr)}` : formatCurrency(remaining, curr)}
           </div>
           <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
-            ${isOver ? 'Over budget' : `left of ${formatCurrency(limit, curr)}`}
+            ${isOver ? 'Over envelope funds' : (cat.unpaidLoans > 0 ? `left of ${formatCurrency(cat.totalFunds, curr)} (${formatCurrency(cat.unpaidLoans, curr)} lent)` : (cat.deposited > 0 && cat.allocatedLimit === 0 ? `left of ${formatCurrency(cat.deposited, curr)} added` : `left of ${formatCurrency(cat.totalFunds, curr)}`))}
           </div>
 
           <div style="width: 100%; margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 0.28rem;">
@@ -394,6 +403,19 @@ export function renderPlanner() {
             <div style="font-size: 0.68rem; color: var(--text-muted); font-weight: 600;">
               ${formatCurrency(cat.spent, curr)} spent
             </div>
+          </div>
+        ` : (cat.spent > 0 ? `
+          <!-- No Budget Set but Spent -->
+          <div style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; color: var(--coral-alert); text-align: center; line-height: 1.1; margin-bottom: 0.2rem;">
+            -${formatCurrency(cat.spent, curr)}
+          </div>
+          <div style="font-size: 0.72rem; color: var(--coral-alert); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
+            spent without budget
+          </div>
+          <div style="margin-top: auto;">
+            <span class="pill" style="font-size: 0.72rem; padding: 0.32rem 0.75rem; background: rgba(255,123,137,0.12); color: var(--coral-alert); font-weight: 700; border: 1px dashed var(--coral-alert);">
+              + Set Budget
+            </span>
           </div>
         ` : `
           <!-- Unallocated State: Clean & Friendly Call to Action -->
@@ -405,7 +427,7 @@ export function renderPlanner() {
               + Set Budget
             </span>
           </div>
-        `}
+        `)}
       `;
 
       itemEl.onclick = () => {
@@ -572,11 +594,14 @@ export function renderPlanner() {
               ${isEdit && (cat.id === 'cat-daily' || cat.name.toLowerCase().includes('allowance')) ? 'Sets the base allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`}
             </small>
           </div>
-          <div class="quick-amount-presets" style="margin-bottom: 1.25rem;">
+          <div class="quick-amount-presets" style="margin-bottom: 0.85rem;">
             <button type="button" class="preset-chip" data-v="500">+500</button>
             <button type="button" class="preset-chip" data-v="1000">+1,000</button>
             <button type="button" class="preset-chip" data-v="2000">+2,000</button>
           </div>
+
+          <!-- Dynamic Overbudget Alert Container -->
+          <div id="limit-error-alert" style="display: none; padding: 0.65rem 0.8rem; background: rgba(255, 235, 237, 0.95); border: 1.5px solid var(--coral-alert); border-radius: var(--radius-sm); color: #B91C1C; font-size: 0.76rem; line-height: 1.35; margin-bottom: 1rem;"></div>
           
           <div style="display: flex; gap: 0.5rem;">
             ${isEdit && (!cat.id || !cat.id.startsWith('cat-income')) ? `
@@ -584,7 +609,7 @@ export function renderPlanner() {
                 Delete
               </button>
             ` : ''}
-            <button type="submit" class="btn btn-primary squish-btn" style="flex: ${isEdit ? '2' : '1'}; padding: 0.85rem;">
+            <button type="submit" id="limit-save-btn" class="btn btn-primary squish-btn" style="flex: ${isEdit ? '2' : '1'}; padding: 0.85rem;">
               Save Allocation
             </button>
           </div>
@@ -602,13 +627,43 @@ export function renderPlanner() {
       if (e.target === backdrop) close();
     });
 
-    const input = backdrop.querySelector('#limit-val');
+    // Calculate remaining unallocated budget for this cutoff excluding current category
+    const catSpendings = store.getCutoffCategorySpending(activeCutoff);
+    const otherAllocations = catSpendings
+      .filter(c => !c.name.toLowerCase().includes('income') && (!isEdit || c.id !== cat.id))
+      .reduce((sum, c) => sum + (c.period_limit || 0), 0);
+    const maxAllowedForThisEnv = Math.max(0, (plan.spendBudget || 0) - otherAllocations);
+
+    const errorAlertEl = backdrop.querySelector('#limit-error-alert');
+    const submitBtn = backdrop.querySelector('#limit-save-btn');
+
+    function validateLimitInput() {
+      const val = Math.round(parseFloat(input.value) || 0);
+      if (plan.spendBudget > 0 && val > maxAllowedForThisEnv) {
+        const excess = val - maxAllowedForThisEnv;
+        errorAlertEl.style.display = 'block';
+        errorAlertEl.innerHTML = `
+          <strong>⚠️ Overbudget Warning:</strong> You only have <strong>${formatCurrency(maxAllowedForThisEnv, curr)}</strong> unallocated in your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)}). This allocation would exceed your cutoff budget by <strong>${formatCurrency(excess, curr)}</strong>.
+        `;
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
+        submitBtn.style.cursor = 'not-allowed';
+      } else {
+        errorAlertEl.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
+      }
+    }
+
+    input.addEventListener('input', validateLimitInput);
 
     backdrop.querySelectorAll('.preset-chip').forEach(btn => {
       btn.onclick = () => {
         playPop();
         const currentVal = parseFloat(input.value) || 0;
         input.value = Math.round(currentVal + parseFloat(btn.dataset.v)).toString();
+        validateLimitInput();
       };
     });
 
@@ -629,6 +684,13 @@ export function renderPlanner() {
       const val = Math.round(parseFloat(input.value) || 0);
       const nameVal = backdrop.querySelector('#env-name').value;
       
+      // Strict guardrail: Do not allow allocations to exceed total cutoff spend budget!
+      if (plan.spendBudget > 0 && val > maxAllowedForThisEnv) {
+        showToast({ text: `Cannot overbudget: Max available is ${formatCurrency(maxAllowedForThisEnv, curr)}`, icon: 'alert' });
+        validateLimitInput();
+        return;
+      }
+
       let targetCatId;
       if (isEdit) {
         targetCatId = cat.id;

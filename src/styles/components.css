@@ -1214,3 +1214,54 @@ input[type="number"],
   position: relative;
 }
 
+/* --- PULL TO REFRESH STYLES --- */
+.ptr-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
+  transition: height 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ptr-pill {
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid var(--sky-200);
+  border-radius: var(--radius-full);
+  padding: 0.35rem 0.85rem;
+  box-shadow: 0 4px 18px rgba(85, 168, 232, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--primary);
+  transform: translateY(-20px);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.ptr-container.ptr-active .ptr-pill {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.ptr-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  transition: transform 0.2s ease;
+}
+
+

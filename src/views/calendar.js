@@ -45,22 +45,36 @@ export function renderCalendar() {
   const dailySpentSoFar = dailyCat ? (dailyCat.spent || 0) : 0;
   const dailyEnvelopeRemaining = Math.max(0, dailyPeriodLimit - dailySpentSoFar);
 
+  // Active / unpaid loans deducted from this daily allowance envelope
+  const cutoffLoans = store.getTransactions().filter(t =>
+    (t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'))) &&
+    t.loanStatus !== 'repaid' &&
+    t.date >= curCutoff.start &&
+    t.date <= curCutoff.end &&
+    (!dailyCat || t.categoryId === dailyCat.id || t.categoryId === 'cat-daily' || !t.categoryId)
+  );
+  const totalLentInAllowance = cutoffLoans.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  const todayLoans = cutoffLoans.filter(t => t.date === todayStr);
+  const todayLent = todayLoans.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
   let baseDaily = 0;
   let suggestedDaily = 0;
   if (dailyPeriodLimit > 0) {
-    baseDaily = Math.round(dailyPeriodLimit / totalDays);
-    suggestedDaily = baseDaily;
+    baseDaily = totalDays > 0 ? Math.round(dailyPeriodLimit / totalDays) : 0;
+    suggestedDaily = daysLeft > 0 ? Math.round(dailyEnvelopeRemaining / daysLeft) : baseDaily;
   } else {
     baseDaily = 0;
     suggestedDaily = 0;
   }
 
-  // Filter expenses belonging to Cutoff Allowance or general
+  // Filter expenses belonging to Cutoff Allowance or general, excluding loans (which reduce the envelope pool)
   const txs = store.getTransactions().filter(t =>
     t.type === 'expense' &&
+    !t.isLoan &&
+    !(t.note && t.note.toLowerCase().includes('(hiram)')) &&
     t.date >= curCutoff.start &&
     t.date <= curCutoff.end &&
-    (t.categoryId === 'cat-daily' || !t.categoryId)
+    (t.categoryId === 'cat-daily' || !t.categoryId || (dailyCat && t.categoryId === dailyCat.id))
   );
 
   const dailySpent = {};
@@ -301,6 +315,12 @@ export function renderCalendar() {
         <span style="color: var(--text-muted); font-weight: 600;">Cutoff Allowance: </span>
         <strong style="color: var(--text-main); font-weight: 800;">${hasDailyBudget ? formatCurrency(dailyPeriodLimit, curr) : 'No Budget'}</strong>
       </div>
+      ${totalLentInAllowance > 0 ? `
+        <div style="text-align: center;">
+          <span style="color: #D97706; font-weight: 700;">🤝 Lent: </span>
+          <strong style="color: #D97706; font-weight: 800;">${formatCurrency(totalLentInAllowance, curr)}</strong>
+        </div>
+      ` : ''}
       <div style="text-align: right;">
         <span style="color: var(--text-muted); font-weight: 600;">Envelope Left: </span>
         <strong style="color: ${hasDailyBudget ? 'var(--primary)' : 'var(--text-muted)'}; font-weight: 800;">${hasDailyBudget ? formatCurrency(dailyEnvelopeRemaining, curr) : '₱0'}</strong>
@@ -343,6 +363,13 @@ export function renderCalendar() {
       <div style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
         Starting: ${formatCurrency(todayData.startAllowance, curr)} &bull; Spent: ${formatCurrency(todayData.spent, curr)}
       </div>
+      ${todayLent > 0 ? `
+        <div style="margin-top: 0.4rem; display: flex; align-items: center; justify-content: center;">
+          <span class="pill" style="background: rgba(85, 168, 232, 0.12); color: var(--primary); font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.65rem; border-radius: var(--radius-full); border: 1px solid var(--sky-200);">
+            🤝 ${formatCurrency(todayLent, curr)} lent today &bull; Deducted from envelope
+          </span>
+        </div>
+      ` : ''}
     </div>
 
     <div class="cloud-progress" style="height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">

@@ -156,3 +156,17 @@
 .anim-fade-in {
   animation: fadeIn 0.22s ease forwards;
 }
+
+@keyframes spinClockwise {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.anim-spin,
+.spinning {
+  animation: spinClockwise 0.7s linear infinite !important;
+}
