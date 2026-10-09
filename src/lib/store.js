@@ -554,7 +554,10 @@ class BudgetStore {
       if (categoryId) {
         const catSpending = this.getCutoffCategorySpending(cutoff);
         const catSpend = catSpending.find(c => c.id === categoryId);
-        if (catSpend) {
+        const isMisc = catSpend && (catSpend.id === 'cat-misc' || catSpend.name.toLowerCase().includes('misc'));
+
+        // Miscellaneous is the ONLY envelope where setting budget is NOT required!
+        if (catSpend && !isMisc) {
           if (catSpend.totalFunds <= 0) {
             throw new Error(`Cannot ${newTx.isLoan ? 'lend from' : 'log expense for'} "${catSpend.name}": Envelope has no allocated budget in cutoff ${cutoff.label}. Please set a budget first in the Planner.`);
           }
@@ -653,7 +656,8 @@ class BudgetStore {
         if (updated.categoryId) {
           const catSpending = this.getCutoffCategorySpending(cutoff);
           const catSpend = catSpending.find(c => c.id === updated.categoryId);
-          if (catSpend) {
+          const isMisc = catSpend && (catSpend.id === 'cat-misc' || catSpend.name.toLowerCase().includes('misc'));
+          if (catSpend && !isMisc) {
             let effectiveCatRem = catSpend.totalFunds - catSpend.spent;
             if (oldTx.type === 'expense' && oldTx.categoryId === updated.categoryId && isDateInRange(oldTx.date, cutoff.start, cutoff.end)) {
               effectiveCatRem += (parseFloat(oldTx.amount) || 0);

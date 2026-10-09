@@ -354,6 +354,7 @@ export function renderPlanner() {
     }
 
     filteredCats.forEach(cat => {
+      const isMisc = cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc');
       const limit = isSemi ? (cat.period_limit || 0) : (cat.monthly_limit || 0);
       const isOver = cat.isExceeded;
       const percent = cat.percent;
@@ -363,7 +364,7 @@ export function renderPlanner() {
 
       const itemEl = document.createElement('div');
       itemEl.className = 'folder-item squish-btn';
-      itemEl.title = `Click to set budget for ${cat.name}`;
+      itemEl.title = isMisc ? `${cat.name} (No set budget required - flexible envelope)` : `Click to set budget for ${cat.name}`;
 
       itemEl.innerHTML = `
         <div style="position: relative; display: flex; justify-content: center; width: 100%; margin-bottom: 0.4rem;">
@@ -383,9 +384,16 @@ export function renderPlanner() {
           ` : ''))}
         </div>
         
-        <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.94rem; color: var(--text-main); line-height: 1.2; text-align: center; margin-bottom: 0.35rem; width: 100%;">
+        <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.94rem; color: var(--text-main); line-height: 1.2; text-align: center; margin-bottom: 0.2rem; width: 100%;">
           ${escapeHtml(cat.name)}
         </div>
+        ${isMisc ? `
+          <div style="width: 100%; display: flex; justify-content: center; margin-bottom: 0.4rem;">
+            <span class="pill" style="font-size: 0.62rem; font-weight: 700; padding: 0.15rem 0.45rem; background: var(--sky-100); color: var(--primary); border: 1px solid var(--sky-300); border-radius: var(--radius-full); max-width: 100%; white-space: normal; text-align: center; line-height: 1.25;">
+              No need to set budget
+            </span>
+          </div>
+        ` : ''}
 
         ${hasFunds ? `
           <!-- Funds Available (either allocated budget or deposited money like excess from last cutoff) -->
@@ -393,7 +401,7 @@ export function renderPlanner() {
             ${isOver ? `-${formatCurrency(cat.spent - cat.totalFunds, curr)}` : formatCurrency(remaining, curr)}
           </div>
           <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
-            ${isOver ? 'Over envelope funds' : (cat.unpaidLoans > 0 ? `left of ${formatCurrency(cat.totalFunds, curr)} (${formatCurrency(cat.unpaidLoans, curr)} lent)` : (cat.deposited > 0 && cat.allocatedLimit === 0 ? `left of ${formatCurrency(cat.deposited, curr)} added` : `left of ${formatCurrency(cat.totalFunds, curr)}`))}
+            ${isOver ? 'Over envelope funds' : (cat.unpaidLoans > 0 ? `left of ${formatCurrency(cat.totalFunds, curr)} (${formatCurrency(cat.unpaidLoans, curr)} lent)` : (cat.deposited > 0 && cat.allocatedLimit === 0 ? `left of ${formatCurrency(cat.deposited, curr)} added` : (isMisc ? `available funds &bull; flex envelope` : `left of ${formatCurrency(cat.totalFunds, curr)}`)))}
           </div>
 
           <div style="width: 100%; margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 0.28rem;">
@@ -403,6 +411,19 @@ export function renderPlanner() {
             <div style="font-size: 0.68rem; color: var(--text-muted); font-weight: 600;">
               ${formatCurrency(cat.spent, curr)} spent
             </div>
+          </div>
+        ` : (isMisc && cat.spent > 0 ? `
+          <!-- Miscellaneous Envelope: Spent from cutoff budget -->
+          <div style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; color: var(--text-main); text-align: center; line-height: 1.1; margin-bottom: 0.2rem;">
+            ${formatCurrency(cat.spent, curr)}
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
+            spent from cutoff
+          </div>
+          <div style="margin-top: auto;">
+            <span class="pill" style="font-size: 0.72rem; padding: 0.3rem 0.65rem; background: var(--sky-100); color: var(--primary); font-weight: 700; border: 1px dashed var(--sky-300);">
+              Flex Envelope
+            </span>
           </div>
         ` : (cat.spent > 0 ? `
           <!-- No Budget Set but Spent -->
@@ -417,6 +438,16 @@ export function renderPlanner() {
               + Set Budget
             </span>
           </div>
+        ` : (isMisc ? `
+          <!-- Miscellaneous Envelope: No set budget needed -->
+          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin: 0.25rem 0 0.55rem 0; line-height: 1.25;">
+            Flexible envelope &bull; Uses cutoff spend
+          </div>
+          <div style="margin-top: auto;">
+            <span class="pill" style="font-size: 0.72rem; padding: 0.3rem 0.65rem; background: var(--sky-100); color: var(--primary); font-weight: 700; border: 1px dashed var(--sky-300); display: inline-flex; align-items: center; gap: 0.25rem;">
+              Flex Envelope
+            </span>
+          </div>
         ` : `
           <!-- Unallocated State: Clean & Friendly Call to Action -->
           <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-align: center; margin: 0.35rem 0 0.85rem 0;">
@@ -427,7 +458,7 @@ export function renderPlanner() {
               + Set Budget
             </span>
           </div>
-        `)}
+        `)))}
       `;
 
       itemEl.onclick = () => {
@@ -587,11 +618,17 @@ export function renderPlanner() {
             <input type="text" id="env-name" class="form-input" required value="${escapeHtml(catName)}" placeholder="e.g. Bills, Shopping, Daily...">
           </div>
 
+          ${isEdit && (cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc')) ? `
+            <div style="margin-bottom: 0.85rem; padding: 0.55rem 0.75rem; background: var(--sky-100); border: 1px solid var(--sky-300); border-radius: var(--radius-sm); font-size: 0.76rem; color: var(--primary); line-height: 1.4;">
+              <strong>Flexible Envelope:</strong> Setting a budget for Miscellaneous is <strong>optional</strong>. It works automatically without a set budget and uses flexible cutoff spending.
+            </div>
+          ` : ''}
+
           <div class="form-group">
             <label class="form-label">Allocated Budget (${curr})</label>
             <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${Math.round(currentLimit)}" step="1" placeholder="0">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-              ${isEdit && (cat.id === 'cat-daily' || cat.name.toLowerCase().includes('allowance')) ? 'Sets the base allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`}
+              ${isEdit && (cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc')) ? 'Optional allocated budget for Miscellaneous (No set budget required)' : (isEdit && (cat.id === 'cat-daily' || cat.name.toLowerCase().includes('allowance')) ? 'Sets the base allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`)}
             </small>
           </div>
           <div class="quick-amount-presets" style="margin-bottom: 0.85rem;">
@@ -634,36 +671,37 @@ export function renderPlanner() {
       .reduce((sum, c) => sum + (c.period_limit || 0), 0);
     const maxAllowedForThisEnv = Math.max(0, (plan.spendBudget || 0) - otherAllocations);
 
+    const input = backdrop.querySelector('#limit-val');
     const errorAlertEl = backdrop.querySelector('#limit-error-alert');
     const submitBtn = backdrop.querySelector('#limit-save-btn');
 
     function validateLimitInput() {
+      if (!input || !errorAlertEl || !submitBtn) return;
       const val = Math.round(parseFloat(input.value) || 0);
       if (plan.spendBudget > 0 && val > maxAllowedForThisEnv) {
         const excess = val - maxAllowedForThisEnv;
         errorAlertEl.style.display = 'block';
         errorAlertEl.innerHTML = `
-          <strong>⚠️ Overbudget Warning:</strong> You only have <strong>${formatCurrency(maxAllowedForThisEnv, curr)}</strong> unallocated in your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)}). This allocation would exceed your cutoff budget by <strong>${formatCurrency(excess, curr)}</strong>.
+          <strong>⚠️ Notice:</strong> You only have <strong>${formatCurrency(maxAllowedForThisEnv, curr)}</strong> unallocated in your current ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)}). Setting this allocation to <strong>${formatCurrency(val, curr)}</strong> exceeds it by <strong>${formatCurrency(excess, curr)}</strong>.
         `;
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.5';
-        submitBtn.style.cursor = 'not-allowed';
       } else {
         errorAlertEl.style.display = 'none';
-        submitBtn.disabled = false;
-        submitBtn.style.opacity = '1';
-        submitBtn.style.cursor = 'pointer';
       }
     }
 
-    input.addEventListener('input', validateLimitInput);
+    if (input) {
+      input.addEventListener('input', validateLimitInput);
+      validateLimitInput();
+    }
 
     backdrop.querySelectorAll('.preset-chip').forEach(btn => {
       btn.onclick = () => {
         playPop();
-        const currentVal = parseFloat(input.value) || 0;
-        input.value = Math.round(currentVal + parseFloat(btn.dataset.v)).toString();
-        validateLimitInput();
+        if (input) {
+          const currentVal = parseFloat(input.value) || 0;
+          input.value = Math.round(currentVal + parseFloat(btn.dataset.v)).toString();
+          validateLimitInput();
+        }
       };
     });
 
@@ -681,15 +719,9 @@ export function renderPlanner() {
 
     backdrop.querySelector('#limit-form').onsubmit = (e) => {
       e.preventDefault();
-      const val = Math.round(parseFloat(input.value) || 0);
-      const nameVal = backdrop.querySelector('#env-name').value;
-      
-      // Strict guardrail: Do not allow allocations to exceed total cutoff spend budget!
-      if (plan.spendBudget > 0 && val > maxAllowedForThisEnv) {
-        showToast({ text: `Cannot overbudget: Max available is ${formatCurrency(maxAllowedForThisEnv, curr)}`, icon: 'alert' });
-        validateLimitInput();
-        return;
-      }
+      const val = Math.round(parseFloat(input ? input.value : 0) || 0);
+      const nameVal = (backdrop.querySelector('#env-name')?.value || '').trim();
+      if (!nameVal) return;
 
       let targetCatId;
       if (isEdit) {

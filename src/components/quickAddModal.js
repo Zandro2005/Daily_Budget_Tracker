@@ -136,11 +136,15 @@ function renderCategoryChips(type, root = modalInstance, selectedCategoryId = nu
     const isSelected = selectedCategoryId
       ? cat.id === selectedCategoryId
       : (type === 'borrow' ? (cat.id === 'cat-daily' || index === 0) : index === 0);
+    const isMisc = cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc');
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = `qa-cat-pill ${isSelected ? 'selected' : ''}`;
     pill.dataset.id = cat.id;
     pill.textContent = cat.name;
+    if (isMisc) {
+      pill.title = `${cat.name} (Flexible envelope - no budget needed)`;
+    }
 
     if (displayList.length % 2 === 1 && index === displayList.length - 1) {
       pill.style.gridColumn = '1 / -1';
@@ -204,6 +208,7 @@ function updateBudgetValidation(root = modalInstance) {
   let catTotalFunds = 0;
   let catSpent = 0;
   let catName = selectedCatSpend ? selectedCatSpend.name : 'Envelope';
+  const isMisc = selectedCatSpend && (selectedCatSpend.id === 'cat-misc' || selectedCatSpend.name.toLowerCase().includes('misc'));
 
   if (selectedCatSpend) {
     catTotalFunds = selectedCatSpend.totalFunds;
@@ -233,7 +238,7 @@ function updateBudgetValidation(root = modalInstance) {
     submitBtn.disabled = true;
     submitBtn.style.opacity = '0.5';
     submitBtn.style.cursor = 'not-allowed';
-  } else if (selectedCatSpend && catTotalFunds <= 0) {
+  } else if (selectedCatSpend && !isMisc && catTotalFunds <= 0) {
     // Envelope has NO budget allocated!
     alertEl.style.display = 'block';
     alertEl.style.background = 'rgba(255, 235, 237, 0.95)';
@@ -249,7 +254,7 @@ function updateBudgetValidation(root = modalInstance) {
     submitBtn.disabled = true;
     submitBtn.style.opacity = '0.5';
     submitBtn.style.cursor = 'not-allowed';
-  } else if (selectedCatSpend && effectiveCatRemaining !== null && amountVal > effectiveCatRemaining) {
+  } else if (selectedCatSpend && !isMisc && effectiveCatRemaining !== null && amountVal > effectiveCatRemaining) {
     // Exceeds Envelope Allocation Budget!
     const overAmt = amountVal - effectiveCatRemaining;
     alertEl.style.display = 'block';
@@ -495,19 +500,22 @@ function createModalDOM() {
         const catSpending = store.getCutoffCategorySpending(cutoff);
         const catSpend = catSpending.find(c => c.id === categoryId);
         if (catSpend) {
-          let effectiveCatRem = catSpend.totalFunds - catSpend.spent;
-          if (currentEditingTx && currentEditingTx.type === 'expense' && currentEditingTx.categoryId === categoryId) {
-            effectiveCatRem += (parseFloat(currentEditingTx.amount) || 0);
-          }
-          if (catSpend.totalFunds <= 0) {
-            playPop();
-            showToast({ text: `Cannot log: Envelope "${catSpend.name}" has no allocated budget for ${cutoff.label}. Set budget in Planner first.` });
-            return;
-          }
-          if (amountVal > effectiveCatRem) {
-            playPop();
-            showToast({ text: `Cannot log: Exceeds "${catSpend.name}" budget! Only ${formatCurrency(Math.max(0, effectiveCatRem), currentCurr)} left.` });
-            return;
+          const isMisc = catSpend.id === 'cat-misc' || catSpend.name.toLowerCase().includes('misc');
+          if (!isMisc) {
+            let effectiveCatRem = catSpend.totalFunds - catSpend.spent;
+            if (currentEditingTx && currentEditingTx.type === 'expense' && currentEditingTx.categoryId === categoryId) {
+              effectiveCatRem += (parseFloat(currentEditingTx.amount) || 0);
+            }
+            if (catSpend.totalFunds <= 0) {
+              playPop();
+              showToast({ text: `Cannot log: Envelope "${catSpend.name}" has no allocated budget for ${cutoff.label}. Set budget in Planner first.` });
+              return;
+            }
+            if (amountVal > effectiveCatRem) {
+              playPop();
+              showToast({ text: `Cannot log: Exceeds "${catSpend.name}" budget! Only ${formatCurrency(Math.max(0, effectiveCatRem), currentCurr)} left.` });
+              return;
+            }
           }
         }
       }

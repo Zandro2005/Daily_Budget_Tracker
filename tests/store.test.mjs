@@ -378,6 +378,54 @@ test('store.getAllLoans retains loans across different cutoffs until explicitly 
   store.deleteTransaction(loanPast.id);
 });
 
+test('Miscellaneous is exempt from requiring set budget, while other envelopes strictly require budget', async () => {
+  const { store } = await import('../src/lib/store.js');
+
+  const curCutoff = store.getCurrentCutoff();
+  const txDate = curCutoff.start;
+
+  // Log income to establish spend budget
+  const incomeTx = store.addTransaction({
+    type: 'income',
+    amount: 10000,
+    note: 'Cutoff Salary',
+    date: txDate,
+    skipBudgetCheck: true
+  });
+
+  // Ensure cat-misc has 0 limit
+  store.updateCutoffCategoryLimit(curCutoff.id, 'cat-misc', 0);
+
+  // Miscellaneous expense with 0 allocated budget must SUCCEED!
+  const miscTx = store.addTransaction({
+    type: 'expense',
+    amount: 300,
+    note: 'Flex expense in misc',
+    date: txDate,
+    categoryId: 'cat-misc'
+  });
+  assert.ok(miscTx.id, 'Expense in Miscellaneous without allocated budget must succeed');
+
+  // Non-misc envelope with 0 budget must FAIL!
+  const otherCat = store.getCategories().find(c => c.id !== 'cat-misc' && !c.name.toLowerCase().includes('income'));
+  if (otherCat) {
+    store.updateCutoffCategoryLimit(curCutoff.id, otherCat.id, 0);
+    assert.throws(() => {
+      store.addTransaction({
+        type: 'expense',
+        amount: 100,
+        note: 'Other expense with 0 budget',
+        date: txDate,
+        categoryId: otherCat.id
+      });
+    }, /has no allocated budget/);
+  }
+
+  // Clean up
+  store.deleteTransaction(miscTx.id);
+  store.deleteTransaction(incomeTx.id);
+});
+
 
 
 
