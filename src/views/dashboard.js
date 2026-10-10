@@ -160,11 +160,11 @@ export function renderDashboard() {
   // 3. Recent Transactions Card
   const txCard = document.createElement('div');
   txCard.className = 'cloud-card';
-  const recentTx = store.getTransactions().slice(0, 5);
+  const recentTx = store.getTransactions().slice(0, 3);
 
   txCard.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+    <div class="dash-widget-header">
+      <h3 class="dash-widget-title">
         ${ICONS.clock} Recent
       </h3>
       <button class="pill squish-btn" id="view-all-tx-btn" style="cursor: pointer; border: none; font-size: 0.75rem;">All →</button>
@@ -175,14 +175,14 @@ export function renderDashboard() {
           ? '<p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1.5rem;">No transactions yet. Tap + to start.</p>'
           : recentTx
               .map(t => `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.9rem; border-radius: var(--radius-md); background: var(--bg-card-cloud); border: 1px solid var(--border-color); transition: all 0.2s ease;">
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <div style="width: 38px; height: 38px; border-radius: var(--radius-full); background: var(--sky-100); display: flex; align-items: center; justify-content: center; color: var(--primary); flex-shrink: 0;">
+          <div class="dash-tx-item">
+            <div class="dash-tx-left">
+              <div class="dash-tx-icon">
                 ${getCategoryIconSvg(t.categoryId || t.categoryName)}
               </div>
-              <div>
-                <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main);">${escapeHtml(stripEmojis(t.note) || stripEmojis(t.categoryName))}</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+              <div class="dash-tx-body">
+                <div class="dash-tx-title" title="${escapeHtml(stripEmojis(t.note) || stripEmojis(t.categoryName))}">${escapeHtml(stripEmojis(t.note) || stripEmojis(t.categoryName))}</div>
+                <div class="dash-tx-sub">
                   <span>${formatDate(t.date)} &bull; ${escapeHtml(stripEmojis(t.categoryName))}</span>
                   ${(t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'))) ? `
                     <span class="pill" style="padding: 0.05rem 0.35rem; font-size: 0.65rem; font-weight: 800; background: ${t.loanStatus === 'repaid' ? 'rgba(86,193,144,0.15)' : 'rgba(255,171,0,0.15)'}; color: ${t.loanStatus === 'repaid' ? 'var(--mint-deep)' : '#B37400'}; border: 1px solid ${t.loanStatus === 'repaid' ? 'rgba(86,193,144,0.4)' : 'rgba(255,171,0,0.4)'};">
@@ -192,7 +192,7 @@ export function renderDashboard() {
                 </div>
               </div>
             </div>
-            <div style="font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: ${
+            <div class="dash-tx-amount" style="color: ${
               t.type === 'income' ? 'var(--mint-deep)' : 'var(--text-main)'
             };">
               ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount, curr)}
@@ -217,93 +217,136 @@ export function renderDashboard() {
   const totalUnpaid = loans.filter(l => l.loanStatus !== 'repaid').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const unpaidCount = loans.filter(l => l.loanStatus !== 'repaid').length;
 
-  loansCard.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.4rem;">
-          🤝 Money Lent (Hiram)
-        </h3>
-        ${unpaidCount > 0 ? `
-          <span class="pill" style="font-size: 0.72rem; font-weight: 700; background: rgba(255,171,0,0.15); color: #B37400; padding: 0.15rem 0.45rem;">
-            ${unpaidCount} Active
-          </span>
-        ` : ''}
+  const renderLoanItem = (l) => {
+    const isRepaid = l.loanStatus === 'repaid';
+    return `
+      <div class="dash-loan-item">
+        <div class="dash-loan-row-top">
+          <div class="dash-loan-borrower" title="${escapeHtml(l.borrowerName || l.note || 'Someone')}">
+            ${escapeHtml(l.borrowerName || l.note || 'Someone')}
+          </div>
+          <div class="dash-loan-actions">
+            <span class="dash-loan-amount" style="color: ${isRepaid ? 'var(--mint-deep)' : 'var(--text-main)'};">
+              ${formatCurrency(l.amount, curr)}
+            </span>
+            ${isRepaid ? `
+              <span class="pill" style="font-size: 0.68rem; font-weight: 800; background: rgba(86,193,144,0.15); color: var(--mint-deep); padding: 0.2rem 0.45rem; border: 1px solid rgba(86,193,144,0.4);">Repaid</span>
+              <button class="icon-btn squish-btn dash-del-loan-btn" data-id="${l.id}" title="Delete Repaid Record" style="width: 28px; height: 28px; color: var(--coral-alert); background: rgba(255,123,137,0.1); border: none; border-radius: var(--radius-full); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;">
+                <span style="display: flex; width: 14px; height: 14px;">${ICONS.trash}</span>
+              </button>
+            ` : `
+              <button class="btn btn-sm squish-btn dash-repay-btn" data-id="${l.id}" style="padding: 0.28rem 0.65rem; font-size: 0.72rem; font-weight: 800; border-radius: var(--radius-full); background: var(--mint-deep); color: white; border: none; cursor: pointer; flex-shrink: 0;">
+                Mark Paid
+              </button>
+            `}
+          </div>
+        </div>
+        <div class="dash-loan-meta">
+          <span>Borrowed: <strong>${formatDate(l.date)}</strong></span>
+          <span>&bull;</span>
+          <span>Deducted from: <span class="pill" style="padding: 0.05rem 0.35rem; font-size: 0.68rem; background: var(--sky-100); color: var(--primary); font-weight: 700;">${escapeHtml(l.categoryName || 'Cutoff Allowance')}</span></span>
+        </div>
       </div>
-      ${loans.length > 0 ? `
-        <span class="pill" style="font-size: 0.74rem; font-weight: 800; padding: 0.2rem 0.55rem; border-radius: var(--radius-full); background: ${totalUnpaid > 0 ? 'rgba(255,171,0,0.15)' : 'rgba(86,193,144,0.15)'}; color: ${totalUnpaid > 0 ? '#B37400' : 'var(--mint-deep)'}; border: 1px solid ${totalUnpaid > 0 ? 'rgba(255,171,0,0.4)' : 'rgba(86,193,144,0.4)'};">
-          ${totalUnpaid > 0 ? `${formatCurrency(totalUnpaid, curr)} pending` : 'All Repaid ✓'}
-        </span>
-      ` : ''}
-    </div>
+    `;
+  };
 
-    <div style="display: flex; flex-direction: column; gap: 0.65rem;">
-      ${loans.length === 0 ? `
+  const bindLoanEvents = () => {
+    loansCard.querySelectorAll('.dash-del-loan-btn').forEach(btn => {
+      btn.onclick = () => {
+        playPop();
+        const id = btn.dataset.id;
+        if (confirm('Delete this repaid hiram record?')) {
+          store.deleteTransaction(id);
+          showToast({ text: 'Repaid record deleted', icon: 'trash' });
+          const newDash = renderDashboard();
+          container.replaceWith(newDash);
+        }
+      };
+    });
+
+    loansCard.querySelectorAll('.dash-repay-btn').forEach(btn => {
+      btn.onclick = () => {
+        playPop();
+        const id = btn.dataset.id;
+        const res = store.repayLoan(id);
+        if (res) {
+          playCoin();
+          showToast({ text: `${res.originalTx.borrowerName || 'Borrower'} paid back ${formatCurrency(res.originalTx.amount, curr)}!`, icon: 'check' });
+          const newDash = renderDashboard();
+          container.replaceWith(newDash);
+        }
+      };
+    });
+  };
+
+  let isLoansExpanded = false;
+
+  const renderLoansContent = () => {
+    if (loans.length === 0) {
+      return `
+        <div class="dash-widget-header">
+          <h3 class="dash-widget-title">
+            🤝 Money Lent (Hiram)
+          </h3>
+        </div>
         <p style="color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 1.5rem 0.5rem; margin: 0;">
           No money lent out. Tap + to record hiram.
         </p>
-      ` : loans.map(l => {
-        const isRepaid = l.loanStatus === 'repaid';
-        return `
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0.9rem; background: var(--bg-card-cloud); border-radius: var(--radius-md); border: 1px solid var(--border-color); gap: 0.65rem; transition: all 0.2s ease;">
-            <div>
-              <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main);">
-                ${escapeHtml(l.borrowerName || l.note || 'Someone')}
-              </div>
-              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
-                <span>Borrowed: <strong>${formatDate(l.date)}</strong></span>
-                ${l.cutoffLabel ? `<span>&bull;</span> <span>${escapeHtml(l.cutoffLabel)}</span>` : ''}
-                <span>&bull;</span>
-                <span>Deducted from: <span class="pill" style="padding: 0.05rem 0.35rem; font-size: 0.68rem; background: var(--sky-100); color: var(--primary); font-weight: 700;">${escapeHtml(l.categoryName || 'Cutoff Allowance')}</span></span>
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
-              <strong style="font-family: var(--font-display); font-size: 1rem; color: ${isRepaid ? 'var(--mint-deep)' : 'var(--text-main)'};">
-                ${formatCurrency(l.amount, curr)}
-              </strong>
-              ${isRepaid ? `
-                <span class="pill" style="font-size: 0.68rem; font-weight: 800; background: rgba(86,193,144,0.15); color: var(--mint-deep); padding: 0.2rem 0.45rem; border: 1px solid rgba(86,193,144,0.4);">Repaid</span>
-                <button class="icon-btn squish-btn dash-del-loan-btn" data-id="${l.id}" title="Delete Repaid Record" style="width: 28px; height: 28px; color: var(--coral-alert); background: rgba(255,123,137,0.1); border: none; border-radius: var(--radius-full); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
-                  <span style="display: flex; width: 14px; height: 14px;">${ICONS.trash}</span>
-                </button>
-              ` : `
-                <button class="btn btn-sm squish-btn dash-repay-btn" data-id="${l.id}" style="padding: 0.28rem 0.65rem; font-size: 0.72rem; font-weight: 800; border-radius: var(--radius-full); background: var(--mint-deep); color: white; border: none; cursor: pointer;">
-                  Mark Paid
-                </button>
-              `}
-            </div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
+      `;
+    }
 
-  loansCard.querySelectorAll('.dash-del-loan-btn').forEach(btn => {
-    btn.onclick = () => {
-      playPop();
-      const id = btn.dataset.id;
-      if (confirm('Delete this repaid hiram record?')) {
-        store.deleteTransaction(id);
-        showToast({ text: 'Repaid record deleted', icon: 'trash' });
-        const newDash = renderDashboard();
-        container.replaceWith(newDash);
-      }
-    };
-  });
+    const visibleLoans = isLoansExpanded ? loans : loans.slice(0, 3);
+    const hiddenCount = Math.max(0, loans.length - 3);
 
-  loansCard.querySelectorAll('.dash-repay-btn').forEach(btn => {
-    btn.onclick = () => {
-      playPop();
-      const id = btn.dataset.id;
-      const res = store.repayLoan(id);
-      if (res) {
-        playCoin();
-        showToast({ text: `${res.originalTx.borrowerName || 'Borrower'} paid back ${formatCurrency(res.originalTx.amount, curr)}!`, icon: 'check' });
-        const newDash = renderDashboard();
-        container.replaceWith(newDash);
-      }
-    };
-  });
+    return `
+      <div class="dash-widget-header">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <h3 class="dash-widget-title">
+            🤝 Money Lent (Hiram)
+          </h3>
+          ${unpaidCount > 0 ? `
+            <span class="pill" style="font-size: 0.72rem; font-weight: 700; background: rgba(255,171,0,0.15); color: #B37400; padding: 0.15rem 0.45rem;">
+              ${unpaidCount} Active
+            </span>
+          ` : ''}
+        </div>
+        <div>
+          <span class="pill" style="font-size: 0.74rem; font-weight: 800; padding: 0.2rem 0.55rem; border-radius: var(--radius-full); background: ${totalUnpaid > 0 ? 'rgba(255,171,0,0.15)' : 'rgba(86,193,144,0.15)'}; color: ${totalUnpaid > 0 ? '#B37400' : 'var(--mint-deep)'}; border: 1px solid ${totalUnpaid > 0 ? 'rgba(255,171,0,0.4)' : 'rgba(86,193,144,0.4)'};">
+            ${totalUnpaid > 0 ? `${formatCurrency(totalUnpaid, curr)} pending` : 'All Repaid ✓'}
+          </span>
+        </div>
+      </div>
 
+      <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+        ${visibleLoans.map(renderLoanItem).join('')}
+      </div>
+
+      ${loans.length > 3 ? `
+        <button id="toggle-loans-btn" class="dash-expand-loans-btn squish-btn">
+          <span>${isLoansExpanded ? 'Show less (recent 3 only)' : `View all loans (${hiddenCount} older)`}</span>
+          <span style="display: inline-flex; width: 14px; height: 14px;">
+            ${isLoansExpanded ? ICONS.chevronUp : ICONS.chevronDown}
+          </span>
+        </button>
+      ` : ''}
+    `;
+  };
+
+  const updateLoansView = () => {
+    loansCard.innerHTML = renderLoansContent();
+    bindLoanEvents();
+
+    const toggleBtn = loansCard.querySelector('#toggle-loans-btn');
+    if (toggleBtn) {
+      toggleBtn.onclick = () => {
+        playPop();
+        isLoansExpanded = !isLoansExpanded;
+        updateLoansView();
+      };
+    }
+  };
+
+  updateLoansView();
   container.appendChild(loansCard);
 
   return container;

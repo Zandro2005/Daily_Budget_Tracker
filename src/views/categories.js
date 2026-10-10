@@ -141,7 +141,7 @@ export function renderCategories() {
 
           <div class="form-group">
             <label class="form-label">Allocated Monthly Budget (${store.getSettings().currency})</label>
-            <input type="number" id="cat-limit-input" class="form-input" placeholder="0 = No budget" value="${existingCat ? existingCat.monthly_limit || 0 : ((parseFloat(settings.expectedIncome) || parseFloat(settings.monthlyBudget) || 0) > 0 ? 3000 : 0)}">
+            <input type="number" id="cat-limit-input" class="form-input" placeholder="0" value="${existingCat && existingCat.monthly_limit > 0 ? existingCat.monthly_limit : ''}">
           </div>
           
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1.5rem;">

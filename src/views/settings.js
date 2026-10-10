@@ -268,26 +268,59 @@ export function renderSettings() {
         Fresh Start (Delete All Data)
       </h3>
       <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.15rem; line-height: 1.5;">
-        Permanently delete all transactions, cutoff records, hiram loans, and envelope allocations to start with a fresh slate.
+        Permanently delete all envelopes, transactions, cutoff records, hiram loans, and Firebase cloud collections to start with a completely fresh slate.
       </p>
-      <button class="btn squish-btn" id="fresh-start-btn" style="background: var(--coral-alert); color: white; border: none; font-weight: 700; padding: 0.65rem 1.25rem; border-radius: var(--radius-full); cursor: pointer;">
-        Delete All Data & Start Fresh
-      </button>
+      <div style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
+        <button class="btn squish-btn" id="fresh-start-btn" style="background: var(--coral-alert); color: white; border: none; font-weight: 700; padding: 0.65rem 1.25rem; border-radius: var(--radius-full); cursor: pointer;">
+          Delete All Data & Start Fresh
+        </button>
+        <button class="btn btn-secondary squish-btn" id="restore-default-cats-btn" style="font-weight: 700; padding: 0.65rem 1.15rem; border-radius: var(--radius-full); cursor: pointer; font-size: 0.82rem;">
+          Load Default 4 Envelopes
+        </button>
+      </div>
     `;
 
-    dangerCard.querySelector('#fresh-start-btn').onclick = async () => {
+    const freshBtn = dangerCard.querySelector('#fresh-start-btn');
+    freshBtn.onclick = async () => {
       playPop();
-      if (confirm('Are you sure you want to delete ALL data and start fresh? This cannot be undone.')) {
+      if (confirm('Are you sure you want to delete ALL data and start fresh? This will permanently wipe all envelopes, transactions, cutoffs, and Firebase cloud collections so no junk is left.')) {
         try {
+          freshBtn.disabled = true;
+          freshBtn.textContent = 'Wiping Firebase & local data...';
           await store.clearAllData();
           playCoin();
-          showToast({ text: 'All data deleted. Starting fresh! 🌟', icon: 'check' });
-          window.location.hash = '#dashboard';
+          showToast({ text: 'All data & envelopes wiped from Firebase and device! 🌟', icon: 'check' });
+          setTimeout(() => {
+            window.location.href = '#dashboard';
+            window.location.reload();
+          }, 400);
         } catch (err) {
           showToast({ text: 'Error clearing data: ' + err.message });
+          freshBtn.disabled = false;
+          freshBtn.textContent = 'Delete All Data & Start Fresh';
         }
       }
     };
+
+    const restoreBtn = dangerCard.querySelector('#restore-default-cats-btn');
+    if (restoreBtn) {
+      restoreBtn.onclick = async () => {
+        playPop();
+        if (confirm('Load the 4 standard envelopes (Bills, Shopping & Needs, Cutoff Allowance, Miscellaneous)?')) {
+          try {
+            restoreBtn.disabled = true;
+            await store.resetToStandardEnvelopes();
+            playCoin();
+            showToast({ text: 'Default 4 envelopes loaded! 📁', icon: 'check' });
+            renderContent();
+          } catch (err) {
+            showToast({ text: 'Error: ' + err.message });
+          } finally {
+            restoreBtn.disabled = false;
+          }
+        }
+      };
+    }
 
     container.appendChild(dangerCard);
   }

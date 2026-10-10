@@ -90,6 +90,19 @@ function resetModalState(type = 'expense', presetDate = null, editTx = null) {
     borrowerInput.value = editTx ? (editTx.borrowerName || '') : '';
   }
 
+  const savingsWrap = modalInstance.querySelector('#qa-savings-wrap');
+  if (savingsWrap) {
+    savingsWrap.style.display = targetType === 'income' ? 'block' : 'none';
+  }
+  const savingsInput = modalInstance.querySelector('#qa-savings-amount');
+  if (savingsInput) {
+    savingsInput.value = editTx ? (editTx.savingsAmount !== undefined ? editTx.savingsAmount : 0) : 0;
+  }
+  const savingsPills = modalInstance.querySelectorAll('.qa-savings-pill');
+  if (savingsPills.length > 0) {
+    savingsPills.forEach(b => b.classList.toggle('active', b.dataset.preset === (editTx && editTx.savingsAmount > 0 ? 'custom' : '0')));
+  }
+
   const amountInput = modalInstance.querySelector('#qa-amount');
   if (amountInput) {
     amountInput.value = editTx ? editTx.amount : '';
@@ -106,36 +119,98 @@ function resetModalState(type = 'expense', presetDate = null, editTx = null) {
   }
 
   renderCategoryChips(targetType, modalInstance, editTx ? editTx.categoryId : (targetType === 'borrow' ? 'cat-daily' : null));
+  updateSavingsCalculation(modalInstance);
   updateBudgetValidation(modalInstance);
+}
+
+function updateSavingsCalculation(root = modalInstance) {
+  if (!root) return;
+  const savingsWrap = root.querySelector('#qa-savings-wrap');
+  if (!savingsWrap || savingsWrap.style.display === 'none') return;
+
+  const curr = store.getSettings().currency || '₱';
+  const amountInput = root.querySelector('#qa-amount');
+  const savingsInput = root.querySelector('#qa-savings-amount');
+  const badgeEl = root.querySelector('#qa-savings-badge');
+  const impactEl = root.querySelector('#qa-savings-impact-text');
+  const ruleBtn = root.querySelector('.qa-savings-pill[data-preset="rule"]');
+
+  const amountVal = parseFloat(amountInput?.value) || 0;
+  const savingsRate = store.getSavingsRate();
+  const rulePct = Math.round(savingsRate * 100);
+
+  if (ruleBtn) {
+    const ruleAmt = Math.round(amountVal * savingsRate);
+    ruleBtn.textContent = `${rulePct}% Rule${amountVal > 0 ? ` (${formatCurrency(ruleAmt, curr)})` : ''}`;
+  }
+
+  const currentSavingsVal = parseFloat(savingsInput?.value) || 0;
+  const clampedSavings = Math.max(0, Math.min(amountVal, currentSavingsVal));
+  const spendVal = Math.max(0, amountVal - clampedSavings);
+
+  if (badgeEl) {
+    if (clampedSavings === 0) {
+      badgeEl.textContent = '₱0 to savings (100% to spend)';
+    } else {
+      const pct = amountVal > 0 ? Math.round((clampedSavings / amountVal) * 100) : 0;
+      badgeEl.textContent = `${formatCurrency(clampedSavings, curr)} (${pct}%) saved`;
+    }
+  }
+
+  if (impactEl) {
+    impactEl.textContent = `+${formatCurrency(spendVal, curr)} to Spend Budget • ${formatCurrency(clampedSavings, curr)} to Savings`;
+  }
 }
 
 function renderCategoryChips(type, root = modalInstance, selectedCategoryId = null) {
   if (!root) return;
+  const catWrap = root.querySelector('#qa-cat-wrap') || root.querySelector('.qa-cat-wrap');
+  if (catWrap) {
+    catWrap.style.display = type === 'income' ? 'none' : 'block';
+  }
+  if (type === 'income') {
+    return; // Category is completely removed from the income form!
+  }
+
   const container = root.querySelector('#qa-category-list');
   if (!container) return;
   container.innerHTML = '';
 
   const catLabel = root.querySelector('#qa-cat-label');
+  let helper = root.querySelector('#qa-cat-helper');
+  if (!helper) {
+    helper = document.createElement('div');
+    helper.id = 'qa-cat-helper';
+    helper.style.cssText = 'font-size: 0.72rem; color: var(--text-muted); margin: -0.25rem 0 0.45rem 0; line-height: 1.35;';
+    if (catLabel && catLabel.parentNode) {
+      catLabel.parentNode.insertBefore(helper, container);
+    }
+  }
+
   if (catLabel) {
     catLabel.textContent = type === 'borrow'
       ? 'Minus from which envelope / budget cut:'
-      : (type === 'income' ? 'Deposit into envelope:' : 'Envelope / Category');
+      : 'Envelope / Category';
+  }
+
+  if (type === 'borrow') {
+    helper.textContent = 'Minuses directly from this envelope\'s allocated funds.';
+    helper.style.display = 'block';
+  } else {
+    helper.style.display = 'none';
   }
 
   const categories = store.getCategories();
-  let displayList;
-  if (type === 'borrow') {
-    displayList = categories.filter(c => !c.name.toLowerCase().includes('income'));
-  } else if (type === 'income') {
-    displayList = categories;
-  } else {
-    displayList = categories.filter(c => !c.name.toLowerCase().includes('income'));
-  }
+  const displayList = categories.filter(c => !c.name.toLowerCase().includes('income'));
+
+  const defaultSelectedId = selectedCategoryId || (
+    type === 'borrow'
+      ? (displayList.find(c => c.id === 'cat-daily' || c.name.toLowerCase().includes('allowance'))?.id || displayList[0]?.id)
+      : displayList[0]?.id
+  );
 
   displayList.forEach((cat, index) => {
-    const isSelected = selectedCategoryId
-      ? cat.id === selectedCategoryId
-      : (type === 'borrow' ? (cat.id === 'cat-daily' || index === 0) : index === 0);
+    const isSelected = cat.id === defaultSelectedId;
     const isMisc = cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc');
     const pill = document.createElement('button');
     pill.type = 'button';
@@ -340,7 +415,7 @@ function createModalDOM() {
         <button type="button" class="qa-type-btn ${currentSelectedType === 'income' ? 'active' : ''}" data-type="income">
           Income
         </button>
-        <button type="button" class="qa-type-btn ${currentSelectedType === 'borrow' ? 'active' : ''}" data-type="borrow" style="white-space: nowrap;">
+        <button type="button" class="qa-type-btn ${currentSelectedType === 'borrow' ? 'active' : ''}" data-type="borrow">
           Hiram (Lend)
         </button>
       </div>
@@ -371,16 +446,49 @@ function createModalDOM() {
                 placeholder="0" 
                 step="any" 
                 inputmode="decimal" 
+                style="outline: none !important; border: none !important; box-shadow: none !important;"
                 required
               >
             </div>
           </div>
         </div>
 
+        <!-- Income Savings Allocation (Only shown when Income is selected) -->
+        <div id="qa-savings-wrap" class="qa-field-group" style="display: ${currentSelectedType === 'income' ? 'block' : 'none'}; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.25rem;">
+            <label class="form-label" style="margin: 0; font-weight: 700;">How much goes to savings?</label>
+            <span id="qa-savings-badge" class="pill" style="font-size: 0.72rem; font-weight: 800; background: rgba(85, 168, 232, 0.12); color: var(--primary); padding: 0.1rem 0.5rem; border-radius: var(--radius-full);">
+              ₱0 to savings
+            </span>
+          </div>
+          <p style="font-size: 0.73rem; color: var(--text-muted); margin: 0 0 0.5rem 0; line-height: 1.35;">
+            Choose if any of this added income goes to savings, or keep 100% in your spend budget.
+          </p>
+
+          <div class="qa-savings-presets" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.35rem; margin-bottom: 0.55rem;">
+            <button type="button" class="qa-savings-pill active" data-preset="0">₱0 (0%)</button>
+            <button type="button" class="qa-savings-pill" data-preset="rule">20% Rule</button>
+            <button type="button" class="qa-savings-pill" data-preset="50">50%</button>
+            <button type="button" class="qa-savings-pill" data-preset="custom">Custom</button>
+          </div>
+
+          <div id="qa-savings-custom-wrap" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card-cloud); padding: 0.45rem 0.75rem; border-radius: var(--radius-md); border: 1.5px solid var(--border-color); gap: 0.5rem;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); white-space: nowrap;">Send to Savings:</span>
+            <div style="display: flex; align-items: center; gap: 0.25rem;">
+              <span style="font-weight: 800; color: var(--text-muted); font-size: 0.88rem;">${curr}</span>
+              <input type="number" id="qa-savings-amount" class="form-input" value="0" min="0" step="any" inputmode="decimal" style="height: 32px; width: 110px; text-align: right; font-weight: 800; border: 1.5px solid var(--border-color); background: var(--bg-card); padding: 0 0.5rem; font-size: 0.92rem; border-radius: 8px;" />
+            </div>
+          </div>
+
+          <div id="qa-savings-impact-badge" style="margin-top: 0.45rem; font-size: 0.75rem; font-weight: 700; color: var(--mint-deep); background: rgba(156, 227, 192, 0.2); border: 1px solid rgba(156, 227, 192, 0.45); padding: 0.4rem 0.65rem; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.35rem;">
+            ✨ <span id="qa-savings-impact-text">+₱0 to Spend Budget • ₱0 to Savings</span>
+          </div>
+        </div>
+
         <!-- Symmetrical 2-Column Categories (Clean Text, No Emojis) -->
         <div class="qa-cat-wrap">
           <label class="form-label" id="qa-cat-label">
-            ${currentSelectedType === 'borrow' ? 'Minus from which envelope / budget cut:' : (currentSelectedType === 'income' ? 'Deposit into envelope:' : 'Category')}
+            ${currentSelectedType === 'borrow' ? 'Minus from which envelope / budget cut:' : (currentSelectedType === 'income' ? 'Deposit Destination (Optional):' : 'Category')}
           </label>
           <div id="qa-category-list" class="qa-cat-list"></div>
         </div>
@@ -422,18 +530,67 @@ function createModalDOM() {
       typeButtons.forEach(b => b.classList.toggle('active', b.dataset.type === nextType));
       const borrowerWrap = backdrop.querySelector('#qa-borrower-wrap');
       if (borrowerWrap) borrowerWrap.style.display = nextType === 'borrow' ? 'block' : 'none';
+      const savingsWrap = backdrop.querySelector('#qa-savings-wrap');
+      if (savingsWrap) savingsWrap.style.display = nextType === 'income' ? 'block' : 'none';
       const submitBtn = backdrop.querySelector('#qa-submit-btn');
       if (submitBtn && !currentEditingTx) {
         submitBtn.textContent = nextType === 'borrow' ? 'Save Hiram' : 'Save Transaction';
       }
       renderCategoryChips(nextType, backdrop);
+      updateSavingsCalculation(backdrop);
       updateBudgetValidation(backdrop);
     });
   });
 
-  // Amount input event for real-time validation
+  // Savings pill handlers
+  const savingsPills = backdrop.querySelectorAll('.qa-savings-pill');
+  const savingsAmountInput = backdrop.querySelector('#qa-savings-amount');
+  savingsPills.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      playPop();
+      savingsPills.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const preset = btn.dataset.preset;
+      const amountVal = parseFloat(backdrop.querySelector('#qa-amount')?.value) || 0;
+      const savingsRate = store.getSavingsRate();
+
+      if (preset === '0') {
+        if (savingsAmountInput) savingsAmountInput.value = '0';
+      } else if (preset === 'rule') {
+        if (savingsAmountInput) savingsAmountInput.value = String(Math.round(amountVal * savingsRate));
+      } else if (preset === '50') {
+        if (savingsAmountInput) savingsAmountInput.value = String(Math.round(amountVal * 0.5));
+      } else if (preset === 'custom') {
+        if (savingsAmountInput) savingsAmountInput.focus();
+      }
+
+      updateSavingsCalculation(backdrop);
+    });
+  });
+
+  if (savingsAmountInput) {
+    savingsAmountInput.addEventListener('input', () => {
+      savingsPills.forEach(b => b.classList.toggle('active', b.dataset.preset === 'custom'));
+      updateSavingsCalculation(backdrop);
+    });
+  }
+
+  // Amount input event for real-time validation and savings calculation
   const amountInput = backdrop.querySelector('#qa-amount');
   amountInput.addEventListener('input', () => {
+    const activePreset = backdrop.querySelector('.qa-savings-pill.active')?.dataset.preset;
+    if (activePreset === '0') {
+      if (savingsAmountInput) savingsAmountInput.value = '0';
+    } else if (activePreset === 'rule') {
+      const amt = parseFloat(amountInput.value) || 0;
+      if (savingsAmountInput) savingsAmountInput.value = String(Math.round(amt * store.getSavingsRate()));
+    } else if (activePreset === '50') {
+      const amt = parseFloat(amountInput.value) || 0;
+      if (savingsAmountInput) savingsAmountInput.value = String(Math.round(amt * 0.5));
+    }
+    updateSavingsCalculation(backdrop);
     updateBudgetValidation(backdrop);
   });
 
@@ -476,6 +633,12 @@ function createModalDOM() {
 
     const isIncome = currentSelectedType === 'income';
     const selectedType = isIncome ? 'income' : 'expense';
+    let savingsAmountVal = 0;
+    if (isIncome) {
+      const rawSavings = parseFloat(backdrop.querySelector('#qa-savings-amount')?.value) || 0;
+      savingsAmountVal = Math.max(0, Math.min(amountVal, rawSavings));
+    }
+    const finalCategoryId = isIncome ? null : categoryId;
     const date = backdrop.querySelector('#qa-date').value;
 
     const txDate = new Date(date + (date.includes('T') ? '' : 'T00:00:00'));
@@ -496,14 +659,14 @@ function createModalDOM() {
         return;
       }
 
-      if (categoryId) {
+      if (finalCategoryId) {
         const catSpending = store.getCutoffCategorySpending(cutoff);
-        const catSpend = catSpending.find(c => c.id === categoryId);
+        const catSpend = catSpending.find(c => c.id === finalCategoryId);
         if (catSpend) {
           const isMisc = catSpend.id === 'cat-misc' || catSpend.name.toLowerCase().includes('misc');
           if (!isMisc) {
             let effectiveCatRem = catSpend.totalFunds - catSpend.spent;
-            if (currentEditingTx && currentEditingTx.type === 'expense' && currentEditingTx.categoryId === categoryId) {
+            if (currentEditingTx && currentEditingTx.type === 'expense' && currentEditingTx.categoryId === finalCategoryId) {
               effectiveCatRem += (parseFloat(currentEditingTx.amount) || 0);
             }
             if (catSpend.totalFunds <= 0) {
@@ -534,9 +697,13 @@ function createModalDOM() {
         const updatedTx = store.updateTransaction(currentEditingTx.id, {
           type: selectedType,
           amount: amountVal,
-          categoryId,
+          categoryId: finalCategoryId,
           note,
           date,
+          ...(isIncome ? {
+            savingsAmount: savingsAmountVal,
+            isAddedIncome: true,
+          } : {}),
           ...(isLoan ? {
             isLoan: true,
             borrowerName: loanBorrower,
@@ -562,9 +729,13 @@ function createModalDOM() {
       const newTx = store.addTransaction({
         type: selectedType,
         amount: amountVal,
-        categoryId,
+        categoryId: finalCategoryId,
         note,
         date,
+        ...(isIncome ? {
+          savingsAmount: savingsAmountVal,
+          isAddedIncome: true,
+        } : {}),
         ...(isLoan ? {
           isLoan: true,
           borrowerName: loanBorrower,
@@ -577,9 +748,16 @@ function createModalDOM() {
         firePastelConfetti();
       }
 
-      const toastText = isLoan
-        ? `Lent ${formatCurrency(amountVal, currentCurr)} to ${loanBorrower} (minused from budget) 🤝`
-        : `Saved ${selectedType === 'income' ? '+' : '-'}${formatCurrency(amountVal, currentCurr)}`;
+      let toastText = `Saved ${selectedType === 'income' ? '+' : '-'}${formatCurrency(amountVal, currentCurr)}`;
+      if (isLoan) {
+        toastText = `Lent ${formatCurrency(amountVal, currentCurr)} to ${loanBorrower} (minused from budget) 🤝`;
+      } else if (isIncome) {
+        if (savingsAmountVal > 0) {
+          toastText = `Added +${formatCurrency(amountVal, currentCurr)} (+${formatCurrency(amountVal - savingsAmountVal, currentCurr)} spend, ${formatCurrency(savingsAmountVal, currentCurr)} saved) 💰`;
+        } else {
+          toastText = `Added +${formatCurrency(amountVal, currentCurr)} to Base Salary (100% to spend budget) 💵`;
+        }
+      }
 
       showToast({
         text: toastText,

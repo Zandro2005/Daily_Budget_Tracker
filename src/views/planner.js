@@ -313,17 +313,17 @@ export function renderPlanner() {
       </div>
 
       <!-- Budget Allocation Bar -->
-      <div style="background: var(--bg-card-cloud); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.65rem 0.85rem; margin-bottom: ${isOverallocated ? '0.75rem' : '1.15rem'};">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-          <div>
+      <div style="background: var(--bg-card-cloud); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.7rem 0.85rem; margin-bottom: ${isOverallocated ? '0.75rem' : '1.15rem'};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.55rem; gap: 0.5rem; flex-wrap: wrap;">
+          <div style="min-width: 0;">
             <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;">Allocated</div>
-            <div style="font-family: var(--font-display); font-size: 1rem; font-weight: 800; color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--primary)'}; margin-top: 0.1rem;">
+            <div style="font-family: var(--font-display); font-size: 1.05rem; font-weight: 800; color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--primary)'}; margin-top: 0.1rem; line-height: 1.2;">
               ${formatCurrency(totalAllocated, curr)} <span style="font-size: 0.74rem; font-weight: 600; color: var(--text-muted);">of ${formatCurrency(cutoffSpendBudget, curr)}</span>
             </div>
           </div>
-          <div style="text-align: right;">
+          <div style="text-align: right; min-width: 0;">
             <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;">${isOverallocated ? 'Over by' : 'Remaining'}</div>
-            <div style="font-family: var(--font-display); font-size: 1rem; font-weight: 800; color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--text-main)'}; margin-top: 0.1rem;">
+            <div style="font-family: var(--font-display); font-size: 1.05rem; font-weight: 800; color: ${isOverallocated ? 'var(--coral-alert)' : 'var(--text-main)'}; margin-top: 0.1rem; line-height: 1.2;">
               ${isOverallocated ? formatCurrency(overlapDiff, curr) : formatCurrency(Math.max(0, unallocated), curr)}
             </div>
           </div>
@@ -350,7 +350,7 @@ export function renderPlanner() {
         </div>
       ` : '')}
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 0.85rem; width: 100%;" id="envelopes-list"></div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; width: 100%;" id="envelopes-list"></div>
     `;
 
     const envelopesList = envelopesCard.querySelector('#envelopes-list');
@@ -376,6 +376,36 @@ export function renderPlanner() {
       };
     }
 
+    if (filteredCats.length === 0) {
+      const emptyBox = document.createElement('div');
+      emptyBox.style.cssText = 'grid-column: 1 / -1; width: 100%; text-align: center; padding: 2.25rem 1rem; background: var(--bg-card-cloud); border: 1.5px dashed var(--border-color); border-radius: var(--radius-lg); color: var(--text-muted);';
+      emptyBox.innerHTML = `
+        <div style="font-size: 2.2rem; margin-bottom: 0.4rem;">📁</div>
+        <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.95rem; color: var(--text-main); margin-bottom: 0.25rem;">
+          No Envelopes Created Yet
+        </div>
+        <div style="font-size: 0.76rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-muted);">
+          Tap "+ Add" above or below to create your first envelope!
+        </div>
+        <button class="btn btn-primary squish-btn" id="empty-add-env-btn" style="padding: 0.45rem 1.15rem; font-size: 0.78rem; font-weight: 700; border-radius: var(--radius-full);">
+          + Create First Envelope
+        </button>
+      `;
+      const emptyAdd = emptyBox.querySelector('#empty-add-env-btn');
+      if (emptyAdd) {
+        emptyAdd.onclick = () => {
+          playPop();
+          if (cutoffSpendBudget <= 0) {
+            showToast({ text: `Cannot allocate envelopes: No budget set for ${selectedCutoff.label}. Please set your budget in Blueprint first.` });
+            openBlueprintModal(selectedCutoff, plan);
+            return;
+          }
+          openLimitModal(null, selectedCutoff);
+        };
+      }
+      envelopesList.appendChild(emptyBox);
+    }
+
     filteredCats.forEach(cat => {
       const isMisc = cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc');
       const limit = isSemi ? (cat.period_limit || 0) : (cat.monthly_limit || 0);
@@ -390,7 +420,7 @@ export function renderPlanner() {
       itemEl.title = isMisc ? `${cat.name} (No set budget required - flexible envelope)` : `Click to set budget for ${cat.name}`;
 
       itemEl.innerHTML = `
-        <div style="position: relative; display: flex; justify-content: center; width: 100%; margin-bottom: 0.4rem;">
+        <div class="folder-svg-wrap">
           ${getWindowsFolderSvg(cat.id || cat.name)}
           ${isOver ? `
             <div style="position: absolute; top: -4px; right: calc(50% - 38px); background: var(--coral-alert); color: white; border-radius: var(--radius-full); padding: 0.1rem 0.45rem; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.68rem; box-shadow: 0 2px 8px rgba(255,100,100,0.4); border: 2px solid white;">
@@ -407,12 +437,12 @@ export function renderPlanner() {
           ` : ''))}
         </div>
         
-        <div style="font-weight: 800; font-family: var(--font-display); font-size: 0.94rem; color: var(--text-main); line-height: 1.2; text-align: center; margin-bottom: 0.2rem; width: 100%;">
+        <div class="folder-title" title="${escapeHtml(cat.name)}">
           ${escapeHtml(cat.name)}
         </div>
         ${isMisc ? `
-          <div style="width: 100%; display: flex; justify-content: center; margin-bottom: 0.4rem;">
-            <span class="pill" style="font-size: 0.62rem; font-weight: 700; padding: 0.15rem 0.45rem; background: var(--sky-100); color: var(--primary); border: 1px solid var(--sky-300); border-radius: var(--radius-full); max-width: 100%; white-space: normal; text-align: center; line-height: 1.25;">
+          <div style="width: 100%; display: flex; justify-content: center; margin-bottom: 0.35rem;">
+            <span class="folder-badge-misc">
               No need to set budget
             </span>
           </div>
@@ -420,27 +450,31 @@ export function renderPlanner() {
 
         ${hasFunds ? `
           <!-- Funds Available (either allocated budget or deposited money like excess from last cutoff) -->
-          <div style="font-family: var(--font-display); font-size: 1.18rem; font-weight: 800; color: ${isOver ? 'var(--coral-alert)' : 'var(--mint-deep)'}; text-align: center; line-height: 1.1; margin-bottom: 0.2rem;">
+          <div class="folder-amount" style="color: ${isOver ? 'var(--coral-alert)' : 'var(--mint-deep)'};">
             ${isOver ? `-${formatCurrency(cat.spent - cat.totalFunds, curr)}` : formatCurrency(remaining, curr)}
           </div>
-          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
-            ${isOver ? 'Over envelope funds' : (cat.unpaidLoans > 0 ? `left of ${formatCurrency(cat.totalFunds, curr)} (${formatCurrency(cat.unpaidLoans, curr)} lent)` : (cat.deposited > 0 && cat.allocatedLimit === 0 ? `left of ${formatCurrency(cat.deposited, curr)} added` : (isMisc ? `available funds &bull; flex envelope` : `left of ${formatCurrency(cat.totalFunds, curr)}`)))}
+          <div class="folder-subtext">
+            ${isOver ? 'Over envelope funds' : (cat.unpaidLoans > 0 ? `left of ${formatCurrency(cat.totalFunds, curr)} (${formatCurrency(cat.unpaidLoans, curr)} lent)` : (cat.deposited > 0 && cat.allocatedLimit === 0 ? `left of ${formatCurrency(cat.deposited, curr)} added` : (isMisc ? `available &bull; flex envelope` : `left of ${formatCurrency(cat.totalFunds, curr)}`)))}
           </div>
 
-          <div style="width: 100%; margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 0.28rem;">
+          <div class="folder-progress-wrap">
             <div class="cloud-progress" style="height: 6px; width: 100%; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
               <div class="cloud-progress-fill ${statusClass}" style="width: ${percent}%;"></div>
             </div>
-            <div style="font-size: 0.68rem; color: var(--text-muted); font-weight: 600;">
-              ${formatCurrency(cat.spent, curr)} spent
+            <div class="folder-spent-tag">
+              ${cat.unpaidLoans > 0
+                ? (cat.consumedSpent > 0
+                    ? `${formatCurrency(cat.consumedSpent, curr)} spent &bull; ${formatCurrency(cat.unpaidLoans, curr)} lent`
+                    : `${formatCurrency(cat.unpaidLoans, curr)} lent`)
+                : `${formatCurrency(cat.spent, curr)} spent`}
             </div>
           </div>
         ` : (isMisc && cat.spent > 0 ? `
           <!-- Miscellaneous Envelope: Spent from cutoff budget -->
-          <div style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; color: var(--text-main); text-align: center; line-height: 1.1; margin-bottom: 0.2rem;">
+          <div class="folder-amount" style="color: var(--text-main);">
             ${formatCurrency(cat.spent, curr)}
           </div>
-          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
+          <div class="folder-subtext">
             spent from cutoff
           </div>
           <div style="margin-top: auto;">
@@ -450,10 +484,10 @@ export function renderPlanner() {
           </div>
         ` : (cat.spent > 0 ? `
           <!-- No Budget Set but Spent -->
-          <div style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; color: var(--coral-alert); text-align: center; line-height: 1.1; margin-bottom: 0.2rem;">
+          <div class="folder-amount" style="color: var(--coral-alert);">
             -${formatCurrency(cat.spent, curr)}
           </div>
-          <div style="font-size: 0.72rem; color: var(--coral-alert); font-weight: 600; text-align: center; margin-bottom: 0.6rem;">
+          <div class="folder-subtext" style="color: var(--coral-alert);">
             spent without budget
           </div>
           <div style="margin-top: auto;">
@@ -463,7 +497,7 @@ export function renderPlanner() {
           </div>
         ` : (isMisc ? `
           <!-- Miscellaneous Envelope: No set budget needed -->
-          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-align: center; margin: 0.25rem 0 0.55rem 0; line-height: 1.25;">
+          <div class="folder-subtext" style="margin: 0.25rem 0 0.55rem 0;">
             Flexible envelope &bull; Uses cutoff spend
           </div>
           <div style="margin-top: auto;">
@@ -473,7 +507,7 @@ export function renderPlanner() {
           </div>
         ` : `
           <!-- Unallocated State: Clean & Friendly Call to Action -->
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-align: center; margin: 0.35rem 0 0.85rem 0;">
+          <div class="folder-subtext" style="margin: 0.35rem 0 0.85rem 0;">
             No budget set
           </div>
           <div style="margin-top: auto;">
@@ -659,7 +693,7 @@ export function renderPlanner() {
 
           <div class="form-group">
             <label class="form-label">Allocated Budget (${curr})</label>
-            <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${Math.round(currentLimit)}" step="1" placeholder="0">
+            <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" value="${currentLimit > 0 ? Math.round(currentLimit) : ''}" step="1" placeholder="0">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
               ${!hasSpendBudget ? `No spend budget set for ${cutoffLabel}. Setting an allocation requires a budget first.` : (isEdit && (cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc')) ? 'Optional allocated budget for Miscellaneous (No set budget required)' : (isEdit && (cat.id === 'cat-daily' || cat.name.toLowerCase().includes('allowance')) ? 'Sets the base allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`))}
             </small>
@@ -779,11 +813,20 @@ export function renderPlanner() {
       };
     }
 
-    backdrop.querySelector('#limit-form').onsubmit = (e) => {
-      e.preventDefault();
+    let isSaving = false;
+    const saveAllocation = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (isSaving) return;
+
       const val = Math.round(parseFloat(input ? input.value : 0) || 0);
       const nameVal = (backdrop.querySelector('#env-name')?.value || '').trim();
-      if (!nameVal) return;
+      if (!nameVal) {
+        backdrop.querySelector('#env-name')?.focus();
+        return;
+      }
 
       if (!hasSpendBudget && val > 0) {
         playPop();
@@ -797,6 +840,7 @@ export function renderPlanner() {
         return;
       }
 
+      isSaving = true;
       let targetCatId;
       if (isEdit) {
         targetCatId = cat.id;
@@ -816,6 +860,14 @@ export function renderPlanner() {
       close();
       renderContent();
     };
+
+    if (submitBtn) {
+      submitBtn.onclick = saveAllocation;
+    }
+    const limitForm = backdrop.querySelector('#limit-form');
+    if (limitForm) {
+      limitForm.onsubmit = saveAllocation;
+    }
 
     document.body.appendChild(backdrop);
   }

@@ -16,7 +16,7 @@ import {
   parseDate,
   toDateString,
 } from './format.js';
-import { getDb, isFirebaseConfigured, setSyncStatus } from './firebase.js';
+import { getDb, isFirebaseConfigured, setSyncStatus, ensureAuth } from './firebase.js';
 import {
   collection,
   doc,
@@ -47,12 +47,20 @@ const FS_COLLECTIONS = {
   CUTOFFS: 'cloudy_cutoffs',
 };
 
+function sanitizeForFirestore(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const clean = {};
+  for (const [key, val] of Object.entries(obj)) {
+    clean[key] = val === undefined ? null : val;
+  }
+  return clean;
+}
+
 const DEFAULT_CATEGORIES = [
   { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
   { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
   { id: 'cat-daily', name: 'Cutoff Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
   { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
-  { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -114,28 +122,11 @@ class BudgetStore {
 
   sanitizeCategories(cats) {
     if (!Array.isArray(cats)) {
-      return [...DEFAULT_CATEGORIES];
+      return [];
     }
 
     // Filter out invalid or unnamed categories, preserving all user-created categories
-    let filtered = cats.filter(c => c && typeof c === 'object' && c.name && String(c.name).trim().length > 0);
-
-    const standard = [
-      { id: 'cat-bills', name: 'Bills', emoji: '', color: '#C8E6C9', monthly_limit: 0 },
-      { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
-      { id: 'cat-daily', name: 'Cutoff Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
-      { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
-      { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
-    ];
-
-    standard.forEach(std => {
-      const existing = filtered.find(c => c.id === std.id || c.name.toLowerCase() === std.name.toLowerCase());
-      if (!existing) {
-        filtered.push(std);
-      }
-    });
-
-    return filtered;
+    return cats.filter(c => c && typeof c === 'object' && c.name && String(c.name).trim().length > 0);
   }
 
   load(key, fallback) {
@@ -221,11 +212,9 @@ class BudgetStore {
           this.save(STORAGE_KEYS.CATEGORIES, this.categories);
           setSyncStatus('synced');
           this.notify();
-        } else if (this.categories && this.categories.length > 0) {
-          // If Firestore is empty, seed it with current categories
-          const batch = writeBatch(db);
-          this.categories.forEach(c => batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c));
-          batch.commit().catch(() => {});
+        } else {
+          this.categories = [];
+          this.save(STORAGE_KEYS.CATEGORIES, []);
           setSyncStatus('synced');
           this.notify();
         }
@@ -447,9 +436,19 @@ class BudgetStore {
   }
 
   addTransaction(tx) {
-    const categoryId = tx.categoryId || tx.category;
-    const category = this.categories.find(c => c.id === categoryId);
+    const rawCatId = (tx.categoryId !== undefined && tx.categoryId !== null && tx.categoryId !== '')
+      ? tx.categoryId
+      : (tx.category !== undefined && tx.category !== null && tx.category !== '' ? tx.category : null);
+    const categoryId = rawCatId || null;
+    const category = categoryId ? this.categories.find(c => c.id === categoryId) : null;
     const isIncome = tx.type === 'income' || categoryId === 'cat-income' || (category && category.name.toLowerCase().includes('income'));
+    const isAddedIncome = tx.isAddedIncome !== undefined
+      ? Boolean(tx.isAddedIncome)
+      : false;
+    const savingsAmount = isIncome
+      ? (tx.savingsAmount !== undefined && tx.savingsAmount !== null ? parseFloat(tx.savingsAmount) : (isAddedIncome ? 0 : null))
+      : null;
+
     const newTx = {
       id: tx.id || ('tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
       type: isIncome ? 'income' : 'expense',
@@ -465,6 +464,10 @@ class BudgetStore {
       borrowerName: tx.borrowerName || null,
       loanStatus: tx.loanStatus || (tx.isLoan ? 'unpaid' : null),
       repaidLoanId: tx.repaidLoanId || null,
+      savingsAmount,
+      isAddedIncome,
+      cutoffId: null,
+      cutoffLabel: null,
     };
 
     // Calculate cutoff that this transaction belongs to
@@ -513,11 +516,28 @@ class BudgetStore {
     this.transactions.unshift(newTx);
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
 
-    if (newTx.type === 'income') {
+    // If adding/restoring a repayment transaction, mark the original loan repaid
+    if (newTx.repaidLoanId) {
+      const origLoan = this.transactions.find(t => t.id === newTx.repaidLoanId);
+      if (origLoan) {
+        origLoan.loanStatus = 'repaid';
+        origLoan.repaidAt = new Date().toISOString();
+        this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+        const db = getDb();
+        if (db) {
+          updateDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, origLoan.id), {
+            loanStatus: 'repaid',
+            repaidAt: origLoan.repaidAt,
+          }).catch(err => console.warn('Firestore re-repay loan status error:', err));
+        }
+      }
+    }
+
+    if (newTx.type === 'income' && !newTx.repaidLoanId && !(newTx.note && newTx.note.toLowerCase().includes('repaid hiram'))) {
       try {
         if (cutoff) {
           const rec = this.getCutoffRecord(cutoff.id) || {};
-          if (!rec.salaryConfirmed) {
+          if (!rec.salaryConfirmed && !newTx.isAddedIncome) {
             this.saveCutoffRecord({
               ...rec,
               id: cutoff.id,
@@ -538,7 +558,7 @@ class BudgetStore {
 
     const db = getDb();
     if (db) {
-      setDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, newTx.id), newTx).catch(err => {
+      setDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, newTx.id), sanitizeForFirestore(newTx)).catch(err => {
         console.warn('Firestore add transaction error:', err);
       });
     }
@@ -559,6 +579,8 @@ class BudgetStore {
       ...this.transactions[idx],
       ...updates,
       amount: updates.amount !== undefined ? parseFloat(updates.amount) : this.transactions[idx].amount,
+      savingsAmount: updates.savingsAmount !== undefined ? (updates.savingsAmount !== null ? parseFloat(updates.savingsAmount) : null) : this.transactions[idx].savingsAmount,
+      isAddedIncome: updates.isAddedIncome !== undefined ? Boolean(updates.isAddedIncome) : this.transactions[idx].isAddedIncome,
       categoryName: category ? category.name : (updates.categoryName || this.transactions[idx].categoryName),
       categoryEmoji: category ? category.emoji : (updates.categoryEmoji || this.transactions[idx].categoryEmoji),
     };
@@ -616,6 +638,25 @@ class BudgetStore {
     this.transactions[idx] = updated;
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
 
+    // If updated transaction is a loan, sync changes with any paired repayment
+    const isLoan = Boolean(updated.isLoan || (updated.note && updated.note.toLowerCase().includes('(hiram)')));
+    if (isLoan) {
+      const pairedRepay = this.transactions.find(t => t.repaidLoanId === updated.id);
+      if (pairedRepay) {
+        pairedRepay.amount = updated.amount;
+        pairedRepay.categoryId = updated.categoryId;
+        pairedRepay.categoryName = updated.categoryName;
+        pairedRepay.note = `${updated.borrowerName || 'Borrower'} (repaid hiram)`;
+        this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+        const db = getDb();
+        if (db) {
+          updateDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, pairedRepay.id), pairedRepay).catch(err => {
+            console.warn('Firestore update paired repayment error:', err);
+          });
+        }
+      }
+    }
+
     // If updated transaction was linked as a cutoff salary confirmation, sync the salaryAmount
     if (updated.type === 'income' && this.cutoffs) {
       Object.keys(this.cutoffs).forEach(cutoffId => {
@@ -631,7 +672,7 @@ class BudgetStore {
 
     const db = getDb();
     if (db) {
-      updateDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, id), updated).catch(err => {
+      updateDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, id), sanitizeForFirestore(updated)).catch(err => {
         console.warn('Firestore update transaction error:', err);
       });
     }
@@ -644,6 +685,39 @@ class BudgetStore {
     if (!deleted) return null;
     this.transactions = this.transactions.filter(t => t.id !== id);
     this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+
+    // If deleted transaction was a loan repayment, restore the original loan to unpaid status
+    if (deleted.repaidLoanId || (deleted.note && deleted.note.toLowerCase().includes('repaid hiram'))) {
+      const origLoan = this.transactions.find(t => t.id === deleted.repaidLoanId);
+      if (origLoan) {
+        origLoan.loanStatus = 'unpaid';
+        delete origLoan.repaidAt;
+        this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+        const db = getDb();
+        if (db) {
+          updateDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, origLoan.id), {
+            loanStatus: 'unpaid',
+            repaidAt: null,
+          }).catch(err => console.warn('Firestore restore loan status error:', err));
+        }
+      }
+    }
+
+    // If deleted transaction was a loan itself, also remove any paired repayment transaction
+    const isLoanTx = Boolean(deleted.isLoan || (deleted.note && deleted.note.toLowerCase().includes('(hiram)')));
+    if (isLoanTx) {
+      const pairedRepay = this.transactions.find(t => t.repaidLoanId === deleted.id);
+      if (pairedRepay) {
+        this.transactions = this.transactions.filter(t => t.id !== pairedRepay.id);
+        this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
+        const db = getDb();
+        if (db) {
+          deleteDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, pairedRepay.id)).catch(err => {
+            console.warn('Firestore delete paired repayment error:', err);
+          });
+        }
+      }
+    }
 
     // If deleted transaction was linked as a cutoff salary confirmation, unconfirm it
     if (deleted.type === 'income' && this.cutoffs) {
@@ -763,7 +837,6 @@ class BudgetStore {
       { id: 'cat-shopping', name: 'Shopping & Needs', emoji: '', color: '#E1BEE7', monthly_limit: 0 },
       { id: 'cat-daily', name: 'Cutoff Allowance', emoji: '', color: '#BFE3F7', monthly_limit: 0 },
       { id: 'cat-misc', name: 'Miscellaneous', emoji: '', color: '#FFE0B2', monthly_limit: 0 },
-      { id: 'cat-income', name: 'Salary & Income', emoji: '', color: '#B2DFDB', monthly_limit: 0 },
     ];
 
     const db = getDb();
@@ -811,9 +884,9 @@ class BudgetStore {
       t => t.date && isDateInRange(t.date, cutoff.start, cutoff.end)
     );
 
-    const loggedIncome = periodTx
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const allIncomeTx = periodTx.filter(
+      t => t.type === 'income' && !t.repaidLoanId && !(t.note && t.note.toLowerCase().includes('repaid hiram'))
+    );
 
     const record = this.getCutoffRecord(cutoff.id);
     const expectedSalary = (record && record.expectedSalary !== undefined)
@@ -824,27 +897,65 @@ class BudgetStore {
               : (Math.round((parseFloat(this.settings.expectedIncome) || 0) / 2)))
           : (parseFloat(this.settings.expectedIncome) || 0));
 
-    const isExpected = loggedIncome <= 0;
-    const paycheck = isExpected ? expectedSalary : loggedIncome;
+    // Identify the primary salary transaction (if one was logged/confirmed)
+    let salaryTx = allIncomeTx.find(t =>
+      (record && record.salaryTxId && t.id === record.salaryTxId) ||
+      t.isBaseSalary ||
+      (!t.isAddedIncome && (t.categoryId === 'cat-income' || (t.note && (t.note.toLowerCase().includes('salary') || t.note.toLowerCase().includes('paycheck')))))
+    );
+
+    if (!salaryTx && allIncomeTx.length > 0) {
+      salaryTx = allIncomeTx.find(t => !t.isAddedIncome);
+    }
+
+    const hasConfirmedSalary = Boolean(salaryTx || (record && record.salaryConfirmed));
+    const baseSalary = salaryTx ? (parseFloat(salaryTx.amount) || expectedSalary) : expectedSalary;
+
+    // Added income transactions (transactions that add on top of base salary)
+    const addedIncomeTxs = allIncomeTx.filter(t => t !== salaryTx);
+    const totalAddedIncome = addedIncomeTxs.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const loggedIncome = allIncomeTx.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const isExpected = !hasConfirmedSalary && totalAddedIncome <= 0;
+    const paycheck = baseSalary + totalAddedIncome;
 
     const savingsRate = (record && record.savingsRate !== undefined) ? record.savingsRate : this.getSavingsRate();
-    const savingsTarget = Math.round(paycheck * savingsRate);
+    const baseSavingsTarget = Math.round(baseSalary * savingsRate);
 
+    // Each added income transaction specifies its own savings allocation (defaults to 0 for added income)
+    const addedSavingsTarget = addedIncomeTxs.reduce((sum, t) => {
+      if (t.savingsAmount !== undefined && t.savingsAmount !== null) {
+        return sum + (parseFloat(t.savingsAmount) || 0);
+      }
+      if (t.isAddedIncome) {
+        return sum + 0;
+      }
+      return sum + Math.round((parseFloat(t.amount) || 0) * savingsRate);
+    }, 0);
+
+    const savingsTarget = baseSavingsTarget + addedSavingsTarget;
     const carriedIn = record ? (parseFloat(record.carriedIn) || 0) : 0;
 
-    let spendBudget = Math.max(0, paycheck - savingsTarget + carriedIn);
-    // Only use customSpendBudget if expected salary mode and custom limit was explicitly saved
-    if (isExpected && record && record.customSpendBudget !== undefined) {
-      spendBudget = Math.max(0, parseFloat(record.customSpendBudget) + carriedIn);
+    let baseSpendBudget = Math.max(0, baseSalary - baseSavingsTarget);
+    if ((isExpected || !hasConfirmedSalary) && record && record.customSpendBudget !== undefined) {
+      baseSpendBudget = Math.max(0, parseFloat(record.customSpendBudget));
     }
+
+    const addedSpendBudget = Math.max(0, totalAddedIncome - addedSavingsTarget);
+    const spendBudget = Math.max(0, baseSpendBudget + addedSpendBudget + carriedIn);
 
     return {
       cutoff,
       paycheck,
+      baseSalary,
+      totalAddedIncome,
       loggedIncome,
       expectedSalary,
       isExpected,
+      hasConfirmedSalary,
       savingsRate,
+      baseSavingsTarget,
+      addedSavingsTarget,
       savingsTarget,
       carriedIn,
       spendBudget,
@@ -856,14 +967,29 @@ class BudgetStore {
     const monthTx = this.transactions.filter(
       t => t.date && t.date.startsWith(yearMonth)
     );
-    const loggedIncome = monthTx
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const allIncomeTx = monthTx
+      .filter(t => t.type === 'income' && !t.repaidLoanId && !(t.note && t.note.toLowerCase().includes('repaid hiram')));
+    const loggedIncome = allIncomeTx.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
     const expectedIncome = parseFloat(this.settings.expectedIncome) || 0;
     const isExpected = loggedIncome <= 0;
     const paycheck = isExpected ? expectedIncome : loggedIncome;
     const savingsRate = this.getSavingsRate();
-    const savingsTarget = Math.round(paycheck * savingsRate);
+
+    let savingsTarget = 0;
+    if (isExpected) {
+      savingsTarget = Math.round(paycheck * savingsRate);
+    } else {
+      savingsTarget = allIncomeTx.reduce((sum, t) => {
+        if (t.savingsAmount !== undefined && t.savingsAmount !== null) {
+          return sum + (parseFloat(t.savingsAmount) || 0);
+        }
+        if (t.isAddedIncome) {
+          return sum + 0;
+        }
+        return sum + Math.round((parseFloat(t.amount) || 0) * savingsRate);
+      }, 0);
+    }
+
     const spendBudget = Math.max(0, paycheck - savingsTarget);
     return {
       yearMonth,
@@ -922,7 +1048,10 @@ class BudgetStore {
     periodTx.forEach(t => {
       const amt = parseFloat(t.amount) || 0;
       if (t.type === 'income') {
-        totalIncome += amt;
+        const isRepayment = Boolean(t.repaidLoanId || (t.note && t.note.toLowerCase().includes('repaid hiram')));
+        if (!isRepayment) {
+          totalIncome += amt;
+        }
       } else if (t.type === 'expense') {
         const isLoan = !!t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'));
         if (isLoan) {
@@ -941,10 +1070,11 @@ class BudgetStore {
       }
     });
 
-    // Unpaid loans directly reduce the available spend budget
-    const budgetLimit = Math.max(0, plan.spendBudget - unpaidLoansTotal);
-    const remainingBudget = Math.max(0, budgetLimit - totalExpense);
-    const usagePercent = budgetLimit > 0 ? (totalExpense / budgetLimit) * 100 : 0;
+    // Lending money deducts from overall budget as well as the envelope; repayment restores it
+    const overallSpent = totalExpense + unpaidLoansTotal;
+    const budgetLimit = plan.spendBudget;
+    const remainingBudget = Math.max(0, budgetLimit - overallSpent);
+    const usagePercent = budgetLimit > 0 ? (overallSpent / budgetLimit) * 100 : 0;
     const isTight = budgetLimit > 0 && remainingBudget > 0 && (remainingBudget <= budgetLimit * 0.20 || usagePercent >= 80);
     const isExhausted = budgetLimit > 0 && remainingBudget <= 0;
 
@@ -952,8 +1082,9 @@ class BudgetStore {
       cutoff,
       record: plan.record,
       plan,
-      totalIncome,
-      totalExpense,
+      totalIncome: Math.max(totalIncome, plan.paycheck),
+      totalExpense: overallSpent,
+      consumedExpense: totalExpense,
       billsTotal,
       unpaidLoansTotal,
       totalLoans,
@@ -1013,14 +1144,10 @@ class BudgetStore {
           spendMap[catId].billsTotal += amt;
         }
       } else if (t.type === 'income') {
-        // Income deposited directly to an envelope (e.g. Misc Envelope or leftover cash)
-        // If this is a repayment of a loan borrowed in this SAME cutoff,
-        // it restores the loan (origLoan.loanStatus === 'repaid', so unpaidTotal is already 0)
-        if (t.repaidLoanId) {
-          const origLoan = this.transactions.find(orig => orig.id === t.repaidLoanId);
-          if (origLoan && isDateInRange(origLoan.date, cutoff.start, cutoff.end)) {
-            return;
-          }
+        // Loan repayments restore the envelope's spent/lent pool, but NEVER inflate allocated budget!
+        const isRepayment = Boolean(t.repaidLoanId || (t.note && t.note.toLowerCase().includes('repaid hiram')));
+        if (isRepayment) {
+          return;
         }
         if (!depositMap[catId]) {
           depositMap[catId] = { total: 0 };
@@ -1058,17 +1185,17 @@ class BudgetStore {
           }
         }
 
-        // Base funds before loan deductions:
+        // Total envelope funds (allocated budget limit + any deposits):
         const baseFunds = allocatedLimit + deposited;
-        // User rule: If budget is set to 2000 and 1000 is borrowed, the set budget is only 1000!
-        // That 1000 is the base until repaid; when repaid, the repaid amount restores the budget.
-        const effectiveLimit = Math.max(0, baseFunds - unpaidLoans);
-        const totalFunds = effectiveLimit;
-        const limit = effectiveLimit;
-        const remaining = effectiveLimit - spent;
+        const totalFunds = baseFunds;
+        const limit = baseFunds;
 
-        const percent = totalFunds > 0 ? Math.min(100, Math.round((spent / totalFunds) * 100)) : (spent > 0 ? 100 : 0);
-        const isExceeded = (totalFunds > 0 && spent > totalFunds) || (totalFunds === 0 && spent > 0);
+        // Loans lent out from this envelope are added to spent so set budget and remaining unallocated are untouched!
+        const totalSpent = spent + unpaidLoans;
+        const remaining = totalFunds - totalSpent;
+
+        const percent = totalFunds > 0 ? Math.min(100, Math.round((totalSpent / totalFunds) * 100)) : (totalSpent > 0 ? 100 : 0);
+        const isExceeded = (totalFunds > 0 && totalSpent > totalFunds) || (totalFunds === 0 && totalSpent > 0);
 
         return {
           ...cat,
@@ -1080,7 +1207,8 @@ class BudgetStore {
           totalLoans,
           totalFunds,
           period_limit: limit,
-          spent,
+          spent: totalSpent,
+          consumedSpent: spent,
           billsSpent,
           dailySpent: Math.max(0, spent - billsSpent),
           percent,
@@ -1781,9 +1909,15 @@ class BudgetStore {
 
     monthTx.forEach(t => {
       if (t.type === 'income') {
-        totalIncome += t.amount;
+        const isRepayment = Boolean(t.repaidLoanId || (t.note && t.note.toLowerCase().includes('repaid hiram')));
+        if (!isRepayment) {
+          totalIncome += t.amount;
+        }
       } else {
-        totalExpense += t.amount;
+        const isLoan = !!t.isLoan || (t.note && t.note.toLowerCase().includes('(hiram)'));
+        if (!isLoan) {
+          totalExpense += t.amount;
+        }
       }
     });
 
@@ -1953,17 +2087,29 @@ class BudgetStore {
   }
 
   async clearAllData() {
+    // 1. Detach all active realtime listeners to avoid race conditions while wiping
+    this.unsubscribers.forEach(unsub => {
+      try { unsub(); } catch (_) {}
+    });
+    this.unsubscribers = [];
+    this.isCloudSyncActive = false;
+
+    // 2. Wipe all local in-memory state completely
     this.transactions = [];
     this.recurring = [];
     this.goals = [];
     this.cutoffs = {};
-    this.categories = DEFAULT_CATEGORIES.map(c => ({ ...c, monthly_limit: 0 }));
+    this.categories = [];
     this.settings = { ...DEFAULT_SETTINGS };
 
-    // Clear all localStorage keys completely
+    // 3. Clear all localStorage keys completely
     try {
-      localStorage.clear();
-      localStorage.setItem(FRESH_START_FLAG, 'true');
+      if (typeof localStorage !== 'undefined') {
+        if (typeof localStorage.clear === 'function') {
+          localStorage.clear();
+        }
+        localStorage.setItem(FRESH_START_FLAG, 'true');
+      }
     } catch (e) {
       console.warn('LocalStorage clear error:', e);
     }
@@ -1972,7 +2118,7 @@ class BudgetStore {
     this.save(STORAGE_KEYS.RECURRING, []);
     this.save(STORAGE_KEYS.GOALS, []);
     this.save(STORAGE_KEYS.CUTOFFS, {});
-    this.save(STORAGE_KEYS.CATEGORIES, this.categories);
+    this.save(STORAGE_KEYS.CATEGORIES, []);
     this.save(STORAGE_KEYS.SETTINGS, this.settings);
     localStorage.setItem(STORAGE_KEYS.FIREBASE_INITIALIZED, 'true');
 
@@ -1980,43 +2126,57 @@ class BudgetStore {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('lyka:reset-payday-dismissal'));
     }
-    this.notify();
 
+    // 4. Wipe ALL documents across all Firestore collections (no junk left!)
     const db = getDb();
     if (db) {
       try {
-        const collections = [
+        await ensureAuth().catch(() => {});
+        const allCollections = [
+          FS_COLLECTIONS.CATEGORIES,
           FS_COLLECTIONS.TRANSACTIONS,
           FS_COLLECTIONS.RECURRING,
           FS_COLLECTIONS.GOALS,
           FS_COLLECTIONS.CUTOFFS,
-          FS_COLLECTIONS.CATEGORIES,
+          FS_COLLECTIONS.SETTINGS,
+          'cloudy_loans',
+          'categories',
+          'transactions',
+          'recurring',
+          'goals',
+          'settings',
+          'cutoffs',
+          'loans',
         ];
-        for (const col of collections) {
-          const snap = await getDocs(collection(db, col));
-          if (!snap.empty) {
-            const batch = writeBatch(db);
-            snap.docs.forEach(d => batch.delete(d.ref));
-            await batch.commit();
+
+        for (const col of allCollections) {
+          try {
+            const snap = await getDocs(collection(db, col));
+            if (!snap.empty) {
+              const docs = snap.docs;
+              const chunkSize = 400;
+              for (let i = 0; i < docs.length; i += chunkSize) {
+                const chunk = docs.slice(i, i + chunkSize);
+                const batch = writeBatch(db);
+                chunk.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+              }
+            }
+          } catch (colErr) {
+            console.warn(`Error wiping collection ${col}:`, colErr);
           }
         }
-        const batch = writeBatch(db);
-        this.categories.forEach(c => batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c));
-        batch.set(doc(db, FS_COLLECTIONS.SETTINGS, 'global'), {
-          currency: this.settings.currency,
-          monthlyBudget: this.settings.monthlyBudget,
-          expectedIncome: this.settings.expectedIncome,
-          savingsRate: this.settings.savingsRate,
-          payCycle: this.settings.payCycle,
-          paydays: this.settings.paydays,
-          salaryByPayday: this.settings.salaryByPayday,
-          soundEnabled: this.settings.soundEnabled,
-        });
-        await batch.commit();
       } catch (err) {
-        console.warn('Clear all cloud data error:', err);
+        console.error('Clear all cloud data error:', err);
+        throw err;
       }
     }
+
+    // 5. Re-attach listeners to the clean empty cloud
+    if (db) {
+      this.attachFirebaseListeners(db);
+    }
+
     this.notify();
     return true;
   }

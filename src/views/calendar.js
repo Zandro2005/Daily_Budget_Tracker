@@ -44,6 +44,7 @@ export function renderCalendar() {
     : 0;
   const dailySpentSoFar = dailyCat ? (dailyCat.spent || 0) : 0;
   const dailyEnvelopeRemaining = Math.max(0, dailyPeriodLimit - dailySpentSoFar);
+  const isDailyExceeded = Boolean(dailyCat && dailyCat.isExceeded);
 
   // Active / unpaid loans deducted from this daily allowance envelope
   const cutoffLoans = store.getTransactions().filter(t =>
@@ -53,15 +54,20 @@ export function renderCalendar() {
     t.date <= curCutoff.end &&
     (!dailyCat || t.categoryId === dailyCat.id || t.categoryId === 'cat-daily' || !t.categoryId)
   );
-  const totalLentInAllowance = cutoffLoans.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  const totalLentInAllowance = (dailyCat && dailyCat.unpaidLoans !== undefined)
+    ? dailyCat.unpaidLoans
+    : cutoffLoans.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   const todayLoans = cutoffLoans.filter(t => t.date === todayStr);
   const todayLent = todayLoans.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+  // Effective period budget after deducting active loans
+  const effectivePeriodBudget = Math.max(0, dailyPeriodLimit - totalLentInAllowance);
 
   let baseDaily = 0;
   let suggestedDaily = 0;
   if (dailyPeriodLimit > 0) {
-    baseDaily = totalDays > 0 ? Math.round(dailyPeriodLimit / totalDays) : 0;
-    suggestedDaily = daysLeft > 0 ? Math.round(dailyEnvelopeRemaining / daysLeft) : baseDaily;
+    baseDaily = totalDays > 0 ? Math.round(effectivePeriodBudget / totalDays) : 0;
+    suggestedDaily = daysLeft > 0 ? Math.round(dailyEnvelopeRemaining / daysLeft) : 0;
   } else {
     baseDaily = 0;
     suggestedDaily = 0;
@@ -77,10 +83,25 @@ export function renderCalendar() {
     (t.categoryId === 'cat-daily' || !t.categoryId || (dailyCat && t.categoryId === dailyCat.id))
   );
 
+  // Filter loan repayments or deposits into Cutoff Allowance
+  const dailyDeposits = store.getTransactions().filter(t =>
+    t.type === 'income' &&
+    (t.repaidLoanId || (t.note && t.note.toLowerCase().includes('repaid'))) &&
+    t.date >= curCutoff.start &&
+    t.date <= curCutoff.end &&
+    (t.categoryId === 'cat-daily' || (dailyCat && t.categoryId === dailyCat.id))
+  );
+
   const dailySpent = {};
   txs.forEach(t => {
     if (!dailySpent[t.date]) dailySpent[t.date] = 0;
     dailySpent[t.date] += parseFloat(t.amount) || 0;
+  });
+
+  // Repayments deposited into this envelope offset daily expenses on that date
+  dailyDeposits.forEach(t => {
+    if (!dailySpent[t.date]) dailySpent[t.date] = 0;
+    dailySpent[t.date] = Math.max(0, dailySpent[t.date] - (parseFloat(t.amount) || 0));
   });
 
   // Calculate cumulative rollover:
@@ -126,9 +147,21 @@ export function renderCalendar() {
     let startAllowance = 0;
     let leftover = 0;
 
+    const dayRate = (dStr >= todayStr && suggestedDaily > 0) ? suggestedDaily : baseDaily;
+
     if (!isBeforeTracking && dailyPeriodLimit > 0) {
-      startAllowance = baseDaily + accumulatedLeftover;
-      leftover = startAllowance - spent;
+      if (isToday) {
+        // Today dynamically reflects suggestedDaily (envelope remaining divided by days left)
+        const effectiveQuota = dailyEnvelopeRemaining > 0 ? (suggestedDaily > 0 ? suggestedDaily : baseDaily) : 0;
+        startAllowance = dailyEnvelopeRemaining > 0 ? Math.max(effectiveQuota, spent) : Math.max(baseDaily, spent);
+        leftover = dailyEnvelopeRemaining > 0 ? Math.max(0, effectiveQuota - spent) : 0;
+      } else if (isPast) {
+        startAllowance = baseDaily + Math.max(0, accumulatedLeftover);
+        leftover = startAllowance - spent;
+      } else {
+        startAllowance = dayRate;
+        leftover = startAllowance - spent;
+      }
     }
 
     allDaysData.push({
@@ -152,26 +185,50 @@ export function renderCalendar() {
   let todayData = allDaysData.find(d => d.dStr === todayStr);
   if (!todayData) {
     const tSpent = dailySpent[todayStr] || 0;
-    const tStart = dailyPeriodLimit > 0 ? (baseDaily + accumulatedLeftover) : 0;
+    const effectiveQuota = dailyEnvelopeRemaining > 0 ? (suggestedDaily > 0 ? suggestedDaily : baseDaily) : 0;
+    const tStart = dailyEnvelopeRemaining > 0 ? Math.max(effectiveQuota, tSpent) : Math.max(baseDaily, tSpent);
     todayData = {
       dStr: todayStr,
       dayNum: todayDate.getDate(),
       spent: tSpent,
       startAllowance: tStart,
-      leftover: tStart - tSpent,
+      leftover: dailyEnvelopeRemaining > 0 ? Math.max(0, effectiveQuota - tSpent) : 0,
     };
+  }
+
+  // Precise state evaluation for Today:
+  if (dailyEnvelopeRemaining === 0 && dailyPeriodLimit > 0) {
+    todayData.leftover = 0;
+    todayData.startAllowance = Math.max(baseDaily, todayData.spent);
+  } else if (!isDailyExceeded && dailyEnvelopeRemaining > 0) {
+    // Envelope has funds: Today remaining is based on dynamic suggested daily rate
+    const effectiveQuota = suggestedDaily > 0 ? suggestedDaily : baseDaily;
+    if (todayData.spent <= effectiveQuota) {
+      todayData.startAllowance = effectiveQuota;
+      todayData.leftover = effectiveQuota - todayData.spent;
+    } else {
+      todayData.startAllowance = todayData.spent;
+      todayData.leftover = 0;
+    }
   }
 
   // --- HEADER (CLEAN & DIRECT) ---
   const header = document.createElement('div');
   header.style.cssText = 'margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;';
+  const effectiveHeaderDaily = (totalLentInAllowance > 0 || (dailyEnvelopeRemaining < dailyPeriodLimit && suggestedDaily > 0))
+    ? suggestedDaily
+    : baseDaily;
+  const effectiveHeaderLabel = (totalLentInAllowance > 0 || (dailyEnvelopeRemaining < dailyPeriodLimit && suggestedDaily > 0 && suggestedDaily !== baseDaily))
+    ? 'effective'
+    : 'base';
+
   header.innerHTML = `
     <div>
       <h2 style="font-family: var(--font-display); font-size: 1.45rem; font-weight: 800; color: var(--text-main); margin: 0 0 0.15rem 0;">
         Daily Tracker
       </h2>
       <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
-        ${curCutoff.label} &bull; ${formatCurrency(baseDaily, curr)}/day base
+        ${curCutoff.label} &bull; ${formatCurrency(effectiveHeaderDaily, curr)}/day ${effectiveHeaderLabel}
       </div>
     </div>
     <button id="toggle-chart-btn" class="pill squish-btn" style="cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-card-cloud); color: var(--text-main); font-weight: 700; font-size: 0.8rem; padding: 0.45rem 0.85rem; border-radius: var(--radius-full);">

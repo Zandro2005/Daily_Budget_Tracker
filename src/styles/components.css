@@ -951,8 +951,12 @@
   user-select: none;
 }
 
-.qa-amount-input {
-  border: none;
+.qa-amount-input,
+.qa-amount-input:focus,
+.qa-amount-input:focus-visible {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   background: transparent;
   font-family: var(--font-display);
   font-size: 2rem;
@@ -961,7 +965,6 @@
   width: 165px;
   max-width: 100%;
   text-align: left;
-  outline: none;
   line-height: 1;
   letter-spacing: -0.5px;
   padding: 0;
@@ -1042,6 +1045,44 @@ input[type="number"],
   font-weight: 700;
   box-shadow: 0 3px 10px rgba(85, 168, 232, 0.32) !important;
   transform: translateY(-1px);
+}
+
+.qa-savings-pill {
+  border: 1.5px solid var(--border-color);
+  background: var(--bg-card-cloud);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  height: 34px;
+  padding: 0 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.16s ease;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.qa-savings-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--sky-100);
+}
+
+[data-theme="night"] .qa-savings-pill:hover {
+  background: rgba(85, 168, 232, 0.12);
+}
+
+.qa-savings-pill.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(85, 168, 232, 0.3) !important;
 }
 
 .qa-row-grid {
@@ -1145,7 +1186,7 @@ input[type="number"],
 .folder-item {
   position: relative;
   border-radius: var(--radius-lg);
-  padding: 1.1rem 0.85rem;
+  padding: 1rem 0.65rem 0.85rem 0.65rem;
   background: var(--bg-card-cloud);
   border: 1.5px solid var(--border-color);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
@@ -1159,6 +1200,112 @@ input[type="number"],
   transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
+}
+
+.folder-item .folder-svg-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+
+.folder-item .folder-svg-wrap svg {
+  width: 76px;
+  height: 65px;
+  max-width: 100%;
+}
+
+.folder-item .folder-title {
+  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  color: var(--text-main);
+  line-height: 1.2;
+  text-align: center;
+  margin-bottom: 0.2rem;
+  width: 100%;
+  min-height: 2.3em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  word-break: break-word;
+}
+
+.folder-item .folder-amount {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.15;
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+}
+
+.folder-item .folder-subtext {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.25;
+  margin-bottom: 0.45rem;
+  min-height: 1.8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.folder-item .folder-progress-wrap {
+  width: 100%;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.folder-item .folder-badge-misc {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
+  background: var(--sky-100);
+  color: var(--primary);
+  border: 1px solid var(--sky-300);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.folder-item .folder-spent-tag {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .folder-item {
+    padding: 0.85rem 0.5rem 0.75rem 0.5rem;
+  }
+  .folder-item .folder-svg-wrap svg {
+    width: 68px;
+    height: 58px;
+  }
+  .folder-item .folder-title {
+    font-size: 0.84rem;
+  }
+  .folder-item .folder-amount {
+    font-size: 1.05rem;
+  }
+  .folder-item .folder-subtext {
+    font-size: 0.67rem;
+  }
 }
 
 .folder-item:hover {
@@ -1264,4 +1411,218 @@ input[type="number"],
   transition: transform 0.2s ease;
 }
 
+/* --- DASHBOARD WIDGETS RESPONSIVE STYLING --- */
+.dash-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+  flex-wrap: wrap;
+}
 
+.dash-widget-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Recent Transaction Item */
+.dash-tx-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-card-cloud);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.dash-tx-left {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.dash-tx-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  background: var(--sky-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.dash-tx-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.dash-tx-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-tx-sub {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-top: 0.15rem;
+}
+
+.dash-tx-amount {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.96rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: right;
+  letter-spacing: -0.01em;
+}
+
+/* Hiram / Loan Card Item */
+.dash-loan-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.8rem 0.85rem;
+  background: var(--bg-card-cloud);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.dash-loan-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dash-loan-borrower {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.dash-loan-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.dash-loan-amount {
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  font-weight: 700;
+  white-space: nowrap;
+  margin-right: 0.2rem;
+}
+
+.dash-loan-meta {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  line-height: 1.35;
+}
+
+.dash-expand-loans-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: rgba(126, 193, 241, 0.12);
+  border: 1px dashed var(--sky-300);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.35rem;
+}
+
+.dash-expand-loans-btn:hover {
+  background: rgba(126, 193, 241, 0.22);
+  border-color: var(--sky-400);
+  transform: translateY(-1px);
+}
+
+.dash-expand-loans-btn:active {
+  transform: scale(0.98);
+}
+
+/* --- HISTORY TRANSACTION FILTERS (TWO EQUAL COLUMNS) --- */
+.tx-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.5rem;
+}
+
+.tx-filter-select {
+  width: 100%;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  padding: 0.55rem 0.5rem !important;
+  padding-right: 1.35rem !important;
+  height: 38px;
+  line-height: normal;
+  border-radius: var(--radius-md, 12px);
+  background: var(--bg-input);
+  color: var(--text-main);
+  border: 1.5px solid var(--border-color);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .tx-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
+  }
+  .tx-filter-select {
+    font-size: 0.75rem !important;
+    padding: 0.45rem 0.35rem !important;
+    padding-right: 1.15rem !important;
+    height: 36px;
+  }
+  .qa-type-toggle {
+    gap: 0.15rem !important;
+  }
+  .qa-type-btn {
+    font-size: 0.75rem !important;
+    padding: 0.35rem 0.15rem !important;
+    white-space: normal !important;
+  }
+}

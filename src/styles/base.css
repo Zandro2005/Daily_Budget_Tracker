@@ -121,7 +121,7 @@ html, body {
 }
 
 /* Focus styles */
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible:not(.qa-amount-input) {
   outline: 3px solid var(--sky-400);
   outline-offset: 2px;
 }
