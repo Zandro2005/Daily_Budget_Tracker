@@ -133,9 +133,15 @@ export function renderCategories() {
             <input type="text" id="cat-name-input" class="form-input" required value="${existingCat ? escapeHtml(existingCat.name) : ''}" placeholder="e.g. Bills, Shopping, Daily...">
           </div>
 
+          ${(parseFloat(settings.expectedIncome) || parseFloat(settings.monthlyBudget) || 0) <= 0 ? `
+            <div style="margin-bottom: 0.85rem; padding: 0.65rem 0.8rem; background: rgba(255, 235, 237, 0.95); border: 1.5px solid var(--coral-alert); border-radius: var(--radius-sm); color: #B91C1C; font-size: 0.78rem; line-height: 1.35;">
+              <strong>⚠️ No Budget Set:</strong> Cannot allocate envelope limits until a monthly budget or expected income is set in Settings or Planner.
+            </div>
+          ` : ''}
+
           <div class="form-group">
             <label class="form-label">Allocated Monthly Budget (${store.getSettings().currency})</label>
-            <input type="number" id="cat-limit-input" class="form-input" placeholder="0 = No budget" value="${existingCat ? existingCat.monthly_limit || 0 : 3000}">
+            <input type="number" id="cat-limit-input" class="form-input" placeholder="0 = No budget" value="${existingCat ? existingCat.monthly_limit || 0 : ((parseFloat(settings.expectedIncome) || parseFloat(settings.monthlyBudget) || 0) > 0 ? 3000 : 0)}">
           </div>
           
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1.5rem;">
@@ -177,10 +183,37 @@ export function renderCategories() {
       };
     }
 
+    const totalBudget = parseFloat(settings.expectedIncome) || parseFloat(settings.monthlyBudget) || 0;
+    const limitInputEl = modalBackdrop.querySelector('#cat-limit-input');
+    const submitBtnEl = modalBackdrop.querySelector('button[type="submit"]');
+
+    if (totalBudget <= 0 && limitInputEl && submitBtnEl) {
+      const validateCatInput = () => {
+        const val = parseFloat(limitInputEl.value) || 0;
+        if (val > 0) {
+          submitBtnEl.disabled = true;
+          submitBtnEl.style.opacity = '0.5';
+          submitBtnEl.style.cursor = 'not-allowed';
+        } else {
+          submitBtnEl.disabled = false;
+          submitBtnEl.style.opacity = '1';
+          submitBtnEl.style.cursor = 'pointer';
+        }
+      };
+      limitInputEl.addEventListener('input', validateCatInput);
+      validateCatInput();
+    }
+
     modalBackdrop.querySelector('#cat-form').onsubmit = (e) => {
       e.preventDefault();
       const name = modalBackdrop.querySelector('#cat-name-input').value;
       const limit = parseFloat(modalBackdrop.querySelector('#cat-limit-input').value) || 0;
+
+      if (totalBudget <= 0 && limit > 0) {
+        playPop();
+        showToast({ text: 'Cannot allocate: No budget set. Please set your budget first.' });
+        return;
+      }
 
       if (isEdit) {
         store.updateCategory(existingCat.id, {

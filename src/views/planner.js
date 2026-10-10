@@ -333,22 +333,45 @@ export function renderPlanner() {
         </div>
       </div>
 
-      <!-- Overlap Warning Banner -->
+      <!-- Overlap or No-Budget Warning Banner -->
       ${isOverallocated ? `
         <div style="background: rgba(255, 123, 137, 0.12); border: 1.5px solid var(--coral-alert); border-radius: var(--radius-md); padding: 0.65rem 0.85rem; margin-bottom: 1.15rem; color: var(--coral-alert); font-size: 0.78rem; font-weight: 700; line-height: 1.35;">
           ⚠️ Budget Warning: Envelope allocations (${formatCurrency(totalAllocated, curr)}) overlap and exceed your cutoff spend budget (${formatCurrency(cutoffSpendBudget, curr)}) by ${formatCurrency(overlapDiff, curr)}. Adjust limits to stay within budget.
         </div>
-      ` : ''}
+      ` : (cutoffSpendBudget <= 0 ? `
+        <div style="background: rgba(255, 235, 237, 0.95); border: 1.5px solid var(--coral-alert); border-radius: var(--radius-md); padding: 0.75rem 0.95rem; margin-bottom: 1.15rem; color: #B91C1C; font-size: 0.8rem; font-weight: 700; line-height: 1.35; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="display: inline-flex; width: 16px; height: 16px; flex-shrink: 0;">${ICONS.alertTriangle}</span>
+            <span>No budget set for ${selectedCutoff.label}. Envelopes cannot be allocated until you set a budget in the Blueprint.</span>
+          </div>
+          <button type="button" class="btn btn-primary squish-btn" id="open-blueprint-cta-btn" style="padding: 0.35rem 0.85rem; font-size: 0.75rem; border-radius: var(--radius-full);">
+            Set Blueprint Budget
+          </button>
+        </div>
+      ` : '')}
 
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 0.85rem; width: 100%;" id="envelopes-list"></div>
     `;
 
     const envelopesList = envelopesCard.querySelector('#envelopes-list');
 
+    const bpCtaBtn = envelopesCard.querySelector('#open-blueprint-cta-btn');
+    if (bpCtaBtn) {
+      bpCtaBtn.onclick = () => {
+        playPop();
+        openBlueprintModal(selectedCutoff, plan);
+      };
+    }
+
     const addEnvBtn = envelopesCard.querySelector('#add-env-btn');
     if (addEnvBtn) {
       addEnvBtn.onclick = () => {
         playPop();
+        if (cutoffSpendBudget <= 0) {
+          showToast({ text: `Cannot allocate envelopes: No budget set for ${selectedCutoff.label}. Please set your budget in Blueprint first.` });
+          openBlueprintModal(selectedCutoff, plan);
+          return;
+        }
         openLimitModal(null, selectedCutoff);
       };
     }
@@ -455,7 +478,7 @@ export function renderPlanner() {
           </div>
           <div style="margin-top: auto;">
             <span class="pill" style="font-size: 0.72rem; padding: 0.32rem 0.75rem; background: var(--sky-100); color: var(--primary); font-weight: 700; border: 1px dashed var(--sky-300); display: inline-flex; align-items: center; gap: 0.25rem;">
-              + Set Budget
+              ${cutoffSpendBudget <= 0 ? 'Set Budget First' : '+ Set Budget'}
             </span>
           </div>
         `)))}
@@ -463,6 +486,11 @@ export function renderPlanner() {
 
       itemEl.onclick = () => {
         playPop();
+        if (cutoffSpendBudget <= 0) {
+          showToast({ text: `Cannot allocate envelopes: No budget set for ${selectedCutoff.label}. Set budget in Blueprint first.` });
+          openBlueprintModal(selectedCutoff, plan);
+          return;
+        }
         openLimitModal(cat, selectedCutoff);
       };
 
@@ -602,6 +630,7 @@ export function renderPlanner() {
     const activeCutoff = cutoff || store.getCurrentCutoff();
     const plan = isSemi ? store.getCutoffPlan(activeCutoff) : store.getMonthPlan();
     const cutoffLabel = activeCutoff ? activeCutoff.label : 'cutoff';
+    const hasSpendBudget = (plan.spendBudget || 0) > 0;
 
     backdrop.innerHTML = `
       <div class="modal-dialog">
@@ -618,17 +647,21 @@ export function renderPlanner() {
             <input type="text" id="env-name" class="form-input" required value="${escapeHtml(catName)}" placeholder="e.g. Bills, Shopping, Daily...">
           </div>
 
-          ${isEdit && (cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc')) ? `
+          ${!hasSpendBudget ? `
+            <div style="margin-bottom: 0.85rem; padding: 0.65rem 0.8rem; background: rgba(255, 235, 237, 0.95); border: 1.5px solid var(--coral-alert); border-radius: var(--radius-sm); color: #B91C1C; font-size: 0.78rem; line-height: 1.35;">
+              <strong>⚠️ No Cutoff Budget Set:</strong> You cannot allocate funds to envelopes because no spend budget has been set for ${cutoffLabel} (${curr} 0). Please set your expected paycheck or income in the Blueprint first.
+            </div>
+          ` : (isEdit && (cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc')) ? `
             <div style="margin-bottom: 0.85rem; padding: 0.55rem 0.75rem; background: var(--sky-100); border: 1px solid var(--sky-300); border-radius: var(--radius-sm); font-size: 0.76rem; color: var(--primary); line-height: 1.4;">
               <strong>Flexible Envelope:</strong> Setting a budget for Miscellaneous is <strong>optional</strong>. It works automatically without a set budget and uses flexible cutoff spending.
             </div>
-          ` : ''}
+          ` : '')}
 
           <div class="form-group">
             <label class="form-label">Allocated Budget (${curr})</label>
             <input type="number" id="limit-val" class="form-input" style="font-size: 1.4rem; font-weight: 700;" required value="${Math.round(currentLimit)}" step="1" placeholder="0">
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-              ${isEdit && (cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc')) ? 'Optional allocated budget for Miscellaneous (No set budget required)' : (isEdit && (cat.id === 'cat-daily' || cat.name.toLowerCase().includes('allowance')) ? 'Sets the base allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`)}
+              ${!hasSpendBudget ? `No spend budget set for ${cutoffLabel}. Setting an allocation requires a budget first.` : (isEdit && (cat.id === 'cat-misc' || cat.name.toLowerCase().includes('misc')) ? 'Optional allocated budget for Miscellaneous (No set budget required)' : (isEdit && (cat.id === 'cat-daily' || cat.name.toLowerCase().includes('allowance')) ? 'Sets the base allowance for your Daily Tracker' : `Allocated portion of your ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)})`))}
             </small>
           </div>
           <div class="quick-amount-presets" style="margin-bottom: 0.85rem;">
@@ -678,14 +711,39 @@ export function renderPlanner() {
     function validateLimitInput() {
       if (!input || !errorAlertEl || !submitBtn) return;
       const val = Math.round(parseFloat(input.value) || 0);
-      if (plan.spendBudget > 0 && val > maxAllowedForThisEnv) {
+
+      if (!hasSpendBudget) {
+        if (val > 0) {
+          errorAlertEl.style.display = 'block';
+          errorAlertEl.innerHTML = `
+            <strong>⚠️ Cannot Allocate:</strong> No spend budget set for ${cutoffLabel} (${curr} 0). You cannot allocate money to envelopes until you set a budget in the Blueprint.
+          `;
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = '0.5';
+          submitBtn.style.cursor = 'not-allowed';
+        } else {
+          errorAlertEl.style.display = 'none';
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = '1';
+          submitBtn.style.cursor = 'pointer';
+        }
+        return;
+      }
+
+      if (val > maxAllowedForThisEnv) {
         const excess = val - maxAllowedForThisEnv;
         errorAlertEl.style.display = 'block';
         errorAlertEl.innerHTML = `
-          <strong>⚠️ Notice:</strong> You only have <strong>${formatCurrency(maxAllowedForThisEnv, curr)}</strong> unallocated in your current ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)}). Setting this allocation to <strong>${formatCurrency(val, curr)}</strong> exceeds it by <strong>${formatCurrency(excess, curr)}</strong>.
+          <strong>⚠️ Overbudget Allocation:</strong> You only have <strong>${formatCurrency(maxAllowedForThisEnv, curr)}</strong> unallocated in your current ${cutoffLabel} spend budget (${formatCurrency(plan.spendBudget, curr)}). Setting this allocation to <strong>${formatCurrency(val, curr)}</strong> exceeds it by <strong>${formatCurrency(excess, curr)}</strong> and cannot be saved.
         `;
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
+        submitBtn.style.cursor = 'not-allowed';
       } else {
         errorAlertEl.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
       }
     }
 
@@ -697,6 +755,10 @@ export function renderPlanner() {
     backdrop.querySelectorAll('.preset-chip').forEach(btn => {
       btn.onclick = () => {
         playPop();
+        if (!hasSpendBudget) {
+          showToast({ text: `Cannot allocate: Set your cutoff budget in Blueprint first.` });
+          return;
+        }
         if (input) {
           const currentVal = parseFloat(input.value) || 0;
           input.value = Math.round(currentVal + parseFloat(btn.dataset.v)).toString();
@@ -722,6 +784,18 @@ export function renderPlanner() {
       const val = Math.round(parseFloat(input ? input.value : 0) || 0);
       const nameVal = (backdrop.querySelector('#env-name')?.value || '').trim();
       if (!nameVal) return;
+
+      if (!hasSpendBudget && val > 0) {
+        playPop();
+        showToast({ text: `Cannot allocate: No spend budget set for ${cutoffLabel}. Please set your budget in Blueprint first.` });
+        return;
+      }
+
+      if (hasSpendBudget && val > maxAllowedForThisEnv) {
+        playPop();
+        showToast({ text: `Cannot allocate: Exceeds unallocated cutoff budget (${formatCurrency(maxAllowedForThisEnv, curr)})!` });
+        return;
+      }
 
       let targetCatId;
       if (isEdit) {

@@ -75,7 +75,7 @@ const DEFAULT_RECURRING = [];
 
 const DEFAULT_GOALS = [];
 
-const FRESH_START_FLAG = 'lyka_clean_fresh_slate_v2';
+const FRESH_START_FLAG = 'lyka_force_wipe_slate_v9';
 
 class BudgetStore {
   constructor() {
@@ -88,26 +88,22 @@ class BudgetStore {
     // Fresh start: wipe any legacy local data on first run
     if (typeof localStorage !== 'undefined' && !localStorage.getItem(FRESH_START_FLAG)) {
       try {
-        Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
-        localStorage.removeItem('lyka_transactions_v2');
-        localStorage.removeItem('lyka_cutoffs_v2');
-        localStorage.removeItem('lyka_recurring_v2');
-        localStorage.removeItem('lyka_goals_v2');
-        localStorage.removeItem('lyka_settings_v2');
-        localStorage.removeItem('lyka_categories_v2');
+        localStorage.clear();
         localStorage.setItem(FRESH_START_FLAG, 'true');
         this._needsCloudPurge = true;
       } catch (_) {}
     }
 
     // Load initial fast state from localStorage
-    this.categories = this.sanitizeCategories(this.load(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES));
+    this.categories = this._needsCloudPurge
+      ? DEFAULT_CATEGORIES.map(c => ({ ...c, monthly_limit: 0 }))
+      : this.sanitizeCategories(this.load(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES.map(c => ({ ...c }))));
     this.save(STORAGE_KEYS.CATEGORIES, this.categories);
-    this.transactions = this.load(STORAGE_KEYS.TRANSACTIONS, []);
-    this.recurring = this.load(STORAGE_KEYS.RECURRING, []);
-    this.goals = this.load(STORAGE_KEYS.GOALS, []);
-    this.settings = this.load(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-    this.cutoffs = this.load(STORAGE_KEYS.CUTOFFS, {});
+    this.transactions = this._needsCloudPurge ? [] : this.load(STORAGE_KEYS.TRANSACTIONS, []);
+    this.recurring = this._needsCloudPurge ? [] : this.load(STORAGE_KEYS.RECURRING, []);
+    this.goals = this._needsCloudPurge ? [] : this.load(STORAGE_KEYS.GOALS, []);
+    this.settings = this._needsCloudPurge ? { ...DEFAULT_SETTINGS } : this.load(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    this.cutoffs = this._needsCloudPurge ? {} : this.load(STORAGE_KEYS.CUTOFFS, {});
 
     // Apply stored theme on init
     this.applyTheme(this.settings.theme);
@@ -181,7 +177,7 @@ class BudgetStore {
   }
 
   // --- FIREBASE REALTIME SETUP ---
-  initFirebase() {
+  async initFirebase() {
     if (!isFirebaseConfigured()) {
       this.isCloudSyncActive = false;
       setSyncStatus('offline');
@@ -194,12 +190,19 @@ class BudgetStore {
       return;
     }
 
-    if (this._needsCloudPurge && db) {
+    if (this._needsCloudPurge) {
       this._needsCloudPurge = false;
-      this.clearAllData().catch(err => console.warn('Cloud purge error:', err));
-      return;
+      try {
+        await this.clearAllData();
+      } catch (err) {
+        console.warn('Cloud purge error:', err);
+      }
     }
 
+    this.attachFirebaseListeners(db);
+  }
+
+  attachFirebaseListeners(db) {
     setSyncStatus('syncing');
 
     // Unsubscribe previous listeners if any
@@ -214,31 +217,15 @@ class BudgetStore {
         if (!snapshot.empty) {
           const remoteCats = [];
           snapshot.forEach(docSnap => remoteCats.push(docSnap.data()));
-
-          // Merge: preserve local category monthly_limit if remote has 0
-          const mergedCats = remoteCats.map(rc => {
-            const local = this.categories.find(lc => lc.id === rc.id || lc.name.toLowerCase() === rc.name.toLowerCase());
-            if (local && (local.monthly_limit > 0) && (!rc.monthly_limit || rc.monthly_limit === 0)) {
-              return { ...rc, monthly_limit: local.monthly_limit };
-            }
-            return rc;
-          });
-
-          // Add any local categories not yet in remote
-          this.categories.forEach(lc => {
-            if (!mergedCats.some(mc => mc.id === lc.id || mc.name.toLowerCase() === lc.name.toLowerCase())) {
-              mergedCats.push(lc);
-              setDoc(doc(db, FS_COLLECTIONS.CATEGORIES, lc.id), lc).catch(() => {});
-            }
-          });
-
-          this.categories = this.sanitizeCategories(mergedCats);
+          this.categories = this.sanitizeCategories(remoteCats);
           this.save(STORAGE_KEYS.CATEGORIES, this.categories);
           setSyncStatus('synced');
           this.notify();
         } else if (this.categories && this.categories.length > 0) {
           // If Firestore is empty, seed it with current categories
-          this.seedInitialData(db);
+          const batch = writeBatch(db);
+          this.categories.forEach(c => batch.set(doc(db, FS_COLLECTIONS.CATEGORIES, c.id), c));
+          batch.commit().catch(() => {});
           setSyncStatus('synced');
           this.notify();
         }
@@ -253,29 +240,14 @@ class BudgetStore {
         if (!snapshot.empty) {
           const remoteTx = [];
           snapshot.forEach(docSnap => remoteTx.push(docSnap.data()));
-
-          // Intelligent merge by ID: ensure local offline transactions are preserved!
-          const txMap = new Map();
-          remoteTx.forEach(t => txMap.set(t.id, t));
-          this.transactions.forEach(t => {
-            if (!txMap.has(t.id)) {
-              txMap.set(t.id, t);
-              // Push local offline transaction to Firestore
-              setDoc(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t).catch(() => {});
-            }
-          });
-
-          const merged = Array.from(txMap.values());
-          merged.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
-          this.transactions = merged;
+          remoteTx.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+          this.transactions = remoteTx;
           this.save(STORAGE_KEYS.TRANSACTIONS, this.transactions);
           setSyncStatus('synced');
           this.notify();
-        } else if (this.transactions && this.transactions.length > 0) {
-          // Firestore is empty but local has transactions! Push them up!
-          const batch = writeBatch(db);
-          this.transactions.forEach(t => batch.set(doc(db, FS_COLLECTIONS.TRANSACTIONS, t.id), t));
-          batch.commit().catch(() => {});
+        } else {
+          this.transactions = [];
+          this.save(STORAGE_KEYS.TRANSACTIONS, []);
           setSyncStatus('synced');
           this.notify();
         }
@@ -290,16 +262,13 @@ class BudgetStore {
         if (!snapshot.empty) {
           const remoteRec = [];
           snapshot.forEach(docSnap => remoteRec.push(docSnap.data()));
-          const recMap = new Map();
-          remoteRec.forEach(r => recMap.set(r.id, r));
-          this.recurring.forEach(r => { if (!recMap.has(r.id)) recMap.set(r.id, r); });
-          this.recurring = Array.from(recMap.values());
+          this.recurring = remoteRec;
           this.save(STORAGE_KEYS.RECURRING, this.recurring);
           this.notify();
-        } else if (this.recurring && this.recurring.length > 0) {
-          const batch = writeBatch(db);
-          this.recurring.forEach(r => batch.set(doc(db, FS_COLLECTIONS.RECURRING, r.id), r));
-          batch.commit().catch(() => {});
+        } else {
+          this.recurring = [];
+          this.save(STORAGE_KEYS.RECURRING, []);
+          this.notify();
         }
       }, (err) => console.warn('Recurring sync error:', err));
       this.unsubscribers.push(unsubRec);
@@ -309,16 +278,13 @@ class BudgetStore {
         if (!snapshot.empty) {
           const remoteGoals = [];
           snapshot.forEach(docSnap => remoteGoals.push(docSnap.data()));
-          const goalsMap = new Map();
-          remoteGoals.forEach(g => goalsMap.set(g.id, g));
-          this.goals.forEach(g => { if (!goalsMap.has(g.id)) goalsMap.set(g.id, g); });
-          this.goals = Array.from(goalsMap.values());
+          this.goals = remoteGoals;
           this.save(STORAGE_KEYS.GOALS, this.goals);
           this.notify();
-        } else if (this.goals && this.goals.length > 0) {
-          const batch = writeBatch(db);
-          this.goals.forEach(g => batch.set(doc(db, FS_COLLECTIONS.GOALS, g.id), g));
-          batch.commit().catch(() => {});
+        } else {
+          this.goals = [];
+          this.save(STORAGE_KEYS.GOALS, []);
+          this.notify();
         }
       }, (err) => console.warn('Goals sync error:', err));
       this.unsubscribers.push(unsubGoals);
@@ -330,39 +296,13 @@ class BudgetStore {
           snapshot.forEach(docSnap => {
             remoteCutoffs[docSnap.id] = docSnap.data();
           });
-
-          // Intelligent merge with local cutoffs:
-          const merged = { ...this.cutoffs };
-          Object.keys(remoteCutoffs).forEach(id => {
-            const localRec = merged[id] || {};
-            const remoteRec = remoteCutoffs[id] || {};
-            merged[id] = {
-              ...localRec,
-              ...remoteRec,
-              categoryLimits: {
-                ...(localRec.categoryLimits || {}),
-                ...(remoteRec.categoryLimits || {}),
-              },
-              salaryConfirmed: Boolean(localRec.salaryConfirmed || remoteRec.salaryConfirmed),
-              paycheckDismissed: Boolean(localRec.paycheckDismissed || remoteRec.paycheckDismissed),
-            };
-          });
-
-          // Also check if local has cutoffs not yet in remote and upload them
-          Object.keys(this.cutoffs || {}).forEach(id => {
-            if (!remoteCutoffs[id]) {
-              setDoc(doc(db, FS_COLLECTIONS.CUTOFFS, id), this.cutoffs[id], { merge: true }).catch(() => {});
-            }
-          });
-
-          this.cutoffs = merged;
+          this.cutoffs = remoteCutoffs;
           this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
           this.notify();
-        } else if (this.cutoffs && Object.keys(this.cutoffs).length > 0) {
-          // Firestore cutoffs collection is empty but local has cutoffs! Push to cloud!
-          const batch = writeBatch(db);
-          Object.values(this.cutoffs).forEach(c => batch.set(doc(db, FS_COLLECTIONS.CUTOFFS, c.id), c));
-          batch.commit().catch(() => {});
+        } else {
+          this.cutoffs = {};
+          this.save(STORAGE_KEYS.CUTOFFS, {});
+          this.notify();
         }
       }, (err) => console.warn('Cutoffs sync error:', err));
       this.unsubscribers.push(unsubCutoffs);
@@ -952,10 +892,7 @@ class BudgetStore {
     const merged = {
       ...existing,
       ...record,
-      categoryLimits: {
-        ...(existing.categoryLimits || {}),
-        ...(record.categoryLimits || {}),
-      },
+      categoryLimits: record.categoryLimits !== undefined ? { ...record.categoryLimits } : { ...(existing.categoryLimits || {}) },
     };
     this.cutoffs[record.id] = merged;
     this.save(STORAGE_KEYS.CUTOFFS, this.cutoffs);
@@ -1105,18 +1042,20 @@ class BudgetStore {
         const monthlyLimit = cat.monthly_limit || 0;
         const nominalHalf = isSemi ? Math.round(monthlyLimit / 2) : monthlyLimit;
 
-        // Specific cutoff limit takes precedence if set, otherwise scale proportionally
+        // Specific cutoff limit takes precedence if set, otherwise scale proportionally (strictly requires a spend budget)
         let allocatedLimit = 0;
-        if (plan.record && plan.record.categoryLimits && plan.record.categoryLimits[cat.id] !== undefined) {
-          allocatedLimit = parseFloat(plan.record.categoryLimits[cat.id]) || 0;
-        } else if (isSemi && nominalSum > 0 && monthlyLimit > 0) {
-          const ratio = (monthlyLimit / 2) / nominalSum;
-          allocatedLimit = Math.round(plan.spendBudget * ratio);
-        } else if (!isSemi && this.settings.monthlyBudget > 0 && monthlyLimit > 0) {
-          const ratio = monthlyLimit / (this.settings.monthlyBudget || 1);
-          allocatedLimit = Math.round(plan.spendBudget * ratio);
-        } else if (nominalHalf > 0) {
-          allocatedLimit = nominalHalf;
+        if ((plan.spendBudget || 0) > 0) {
+          if (plan.record && plan.record.categoryLimits && plan.record.categoryLimits[cat.id] !== undefined) {
+            allocatedLimit = parseFloat(plan.record.categoryLimits[cat.id]) || 0;
+          } else if (isSemi && nominalSum > 0 && monthlyLimit > 0) {
+            const ratio = (monthlyLimit / 2) / nominalSum;
+            allocatedLimit = Math.round(plan.spendBudget * ratio);
+          } else if (!isSemi && this.settings.monthlyBudget > 0 && monthlyLimit > 0) {
+            const ratio = monthlyLimit / (this.settings.monthlyBudget || 1);
+            allocatedLimit = Math.round(plan.spendBudget * ratio);
+          } else if (nominalHalf > 0) {
+            allocatedLimit = nominalHalf;
+          }
         }
 
         // Base funds before loan deductions:
@@ -2018,18 +1957,13 @@ class BudgetStore {
     this.recurring = [];
     this.goals = [];
     this.cutoffs = {};
-    this.categories = DEFAULT_CATEGORIES.map(c => ({ ...c }));
+    this.categories = DEFAULT_CATEGORIES.map(c => ({ ...c, monthly_limit: 0 }));
     this.settings = { ...DEFAULT_SETTINGS };
 
     // Clear all localStorage keys completely
     try {
-      Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
-      localStorage.removeItem('lyka_transactions_v2');
-      localStorage.removeItem('lyka_cutoffs_v2');
-      localStorage.removeItem('lyka_recurring_v2');
-      localStorage.removeItem('lyka_goals_v2');
-      localStorage.removeItem('lyka_settings_v2');
-      localStorage.removeItem('lyka_categories_v2');
+      localStorage.clear();
+      localStorage.setItem(FRESH_START_FLAG, 'true');
     } catch (e) {
       console.warn('LocalStorage clear error:', e);
     }
@@ -2056,6 +1990,7 @@ class BudgetStore {
           FS_COLLECTIONS.RECURRING,
           FS_COLLECTIONS.GOALS,
           FS_COLLECTIONS.CUTOFFS,
+          FS_COLLECTIONS.CATEGORIES,
         ];
         for (const col of collections) {
           const snap = await getDocs(collection(db, col));

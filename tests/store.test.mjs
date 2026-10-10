@@ -225,6 +225,15 @@ test('unpaid loan reduces envelope set budget from 2000 to 1000, and repayment r
   const cutoff = store.getCurrentCutoff();
   const allowanceCat = store.getCategories().find(c => c.name.toLowerCase().includes('allowance')) || store.getCategories()[0];
 
+  // Set up salary income for cutoff so spend budget exists
+  const salaryTx = store.addTransaction({
+    type: 'income',
+    amount: 10000,
+    date: cutoff.start,
+    categoryId: 'cat-income',
+    skipBudgetCheck: true
+  });
+
   // Set explicit limit of 2000 for this envelope in this cutoff
   store.updateCutoffCategoryLimit(cutoff.id, allowanceCat.id, 2000);
 
@@ -264,6 +273,8 @@ test('unpaid loan reduces envelope set budget from 2000 to 1000, and repayment r
   // Clean up
   store.deleteTransaction(loanTx.id);
   store.deleteTransaction(result.repaymentTx.id);
+  store.deleteTransaction(salaryTx.id);
+  store.updateCutoffCategoryLimit(cutoff.id, allowanceCat.id, 0);
 });
 
 test('store.addTransaction rejects expenses that exceed envelope budget or when envelope has 0 budget', async () => {
